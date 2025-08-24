@@ -1,8 +1,18 @@
 interface DataForSEOEndpoints {
   readonly SERP_GOOGLE_ORGANIC: string;
   readonly SERP_GOOGLE_PAID: string;
+  readonly SERP_BING_ORGANIC: string;
+  readonly SERP_YAHOO_ORGANIC: string;
+  readonly SERP_YOUTUBE_VIDEO: string;
   readonly KEYWORDS_GOOGLE_ADS: string;
   readonly KEYWORDS_SUGGESTIONS: string;
+  readonly AMAZON_PRODUCTS: string;
+  readonly AMAZON_SEARCH_VOLUME: string;
+  readonly SOCIAL_MEDIA_LIVE: string;
+  readonly CLICKSTREAM_SEARCH_VOLUME: string;
+  readonly DEMOGRAPHIC_DATA: string;
+  readonly LLM_CHATGPT: string;
+  readonly LLM_CLAUDE: string;
   readonly BACKLINKS_OVERVIEW: string;
   readonly BACKLINKS_BULK: string;
   readonly DOMAIN_ANALYTICS_OVERVIEW: string;
@@ -41,8 +51,18 @@ class DataForSEOConfiguration {
   public readonly endpoints: DataForSEOEndpoints = {
     SERP_GOOGLE_ORGANIC: '/v3/serp/google/organic/live/advanced',
     SERP_GOOGLE_PAID: '/v3/serp/google/paid/live/advanced',
+    SERP_BING_ORGANIC: '/v3/serp/bing/organic/live/advanced',
+    SERP_YAHOO_ORGANIC: '/v3/serp/yahoo/organic/live/advanced',
+    SERP_YOUTUBE_VIDEO: '/v3/serp/youtube/organic/live/advanced',
     KEYWORDS_GOOGLE_ADS: '/v3/keywords_data/google_ads/keywords_for_keywords/live',
     KEYWORDS_SUGGESTIONS: '/v3/dataforseo_labs/google/keyword_suggestions/live',
+    AMAZON_PRODUCTS: '/v3/merchant/amazon/products/live/advanced',
+    AMAZON_SEARCH_VOLUME: '/v3/dataforseo_labs/amazon/bulk_search_volume/live',
+    SOCIAL_MEDIA_LIVE: '/v3/business_data/social_media/live',
+    CLICKSTREAM_SEARCH_VOLUME: '/v3/keywords_data/clickstream_data/search_volume/live',
+    DEMOGRAPHIC_DATA: '/v3/dataforseo_labs/google/categories_for_domain/live',
+    LLM_CHATGPT: '/v3/content_generation/generate/live',
+    LLM_CLAUDE: '/v3/content_analysis/ai_overview/live',
     BACKLINKS_OVERVIEW: '/v3/backlinks/summary/live',
     BACKLINKS_BULK: '/v3/backlinks/bulk_backlinks/live',
     DOMAIN_ANALYTICS_OVERVIEW: '/v3/domain_analytics/google/organic/overview/live',
