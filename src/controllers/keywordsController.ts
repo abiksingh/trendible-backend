@@ -3,6 +3,7 @@ import { getKeywordData, getKeywordSuggestions, batchKeywordAnalysis } from '../
 import { handleApiError } from '../utils/dataForSEOErrorHandlers';
 import { logInfo, logError } from '../utils/dataForSEOLogger';
 import { ProcessedResponse } from '../middleware/responseFormatter';
+import { DataForSEOExtractors, DataForSEOResponseHandler } from '../utils/dataForSEOResponseHandler';
 
 interface KeywordsRequest extends Request {
   body: {
@@ -38,7 +39,8 @@ export const keywordsController = {
       const response = await getKeywordData(keywordParams);
       const responseTime = Date.now() - startTime;
 
-      const keywordResults = response.tasks?.[0]?.result || [];
+      const keywordResults = DataForSEOExtractors.keywordResults(response);
+      const responseSummary = DataForSEOResponseHandler.getResponseSummary(response);
 
       processedRes.apiSuccess({
         total_keywords: keywordResults.length,
@@ -54,7 +56,7 @@ export const keywordsController = {
           low_top_of_page_bid: item.low_top_of_page_bid || 0,
           high_top_of_page_bid: item.high_top_of_page_bid || 0
         })),
-        cost: response.cost || 0
+        cost: responseSummary.totalCost
       }, {
         response_time_ms: responseTime
       });
@@ -106,7 +108,8 @@ export const keywordsController = {
       const response = await getKeywordSuggestions(suggestionParams);
       const responseTime = Date.now() - startTime;
 
-      const suggestions = response.tasks?.[0]?.result || [];
+      const suggestions = DataForSEOExtractors.keywordResults(response);
+      const responseSummary = DataForSEOResponseHandler.getResponseSummary(response);
 
       processedRes.apiSuccess({
         seed_keywords: keywords,
@@ -120,7 +123,7 @@ export const keywordsController = {
           cpc: item.cpc || 0,
           monthly_searches: item.monthly_searches || []
         })),
-        cost: response.cost || 0
+        cost: responseSummary.totalCost
       }, {
         response_time_ms: responseTime
       });
@@ -180,20 +183,52 @@ export const keywordsController = {
         keywords: keywords,
         keyword_data: {
           available: !!analysisResult.keywordData,
-          results: analysisResult.keywordData?.tasks?.[0]?.result || [],
+          results: analysisResult.keywordData ? 
+            (() => {
+              try {
+                return DataForSEOExtractors.keywordResults(analysisResult.keywordData);
+              } catch (extractError) {
+                return [];
+              }
+            })() : [],
           cost: analysisResult.keywordData?.cost || 0
         },
         serp_data: {
           total_searches: analysisResult.serpResults.length,
           successful_searches: analysisResult.serpResults.filter(r => r.data && !r.error).length,
-          results: analysisResult.serpResults.map(result => ({
-            keyword: result.keyword,
-            success: !result.error,
-            data: result.data?.tasks?.[0]?.result || [],
-            total_results: result.data?.tasks?.[0]?.result?.length || 0,
-            cost: result.data?.cost || 0,
-            error: result.error || null
-          }))
+          results: analysisResult.serpResults.map(result => {
+            if (result.error) {
+              return {
+                keyword: result.keyword,
+                success: false,
+                data: [],
+                total_results: 0,
+                cost: 0,
+                error: result.error
+              };
+            }
+            
+            try {
+              const serpResults = DataForSEOExtractors.serpResults(result.data);
+              return {
+                keyword: result.keyword,
+                success: true,
+                data: serpResults,
+                total_results: serpResults.length,
+                cost: result.data?.cost || 0,
+                error: null
+              };
+            } catch (extractError) {
+              return {
+                keyword: result.keyword,
+                success: false,
+                data: [],
+                total_results: 0,
+                cost: result.data?.cost || 0,
+                error: extractError instanceof Error ? extractError.message : 'Unknown extraction error'
+              };
+            }
+          })
         },
         total_cost: totalCost
       }, {

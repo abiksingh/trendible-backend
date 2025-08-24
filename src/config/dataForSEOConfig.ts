@@ -42,7 +42,7 @@ class DataForSEOConfiguration {
     SERP_GOOGLE_ORGANIC: '/v3/serp/google/organic/live/advanced',
     SERP_GOOGLE_PAID: '/v3/serp/google/paid/live/advanced',
     KEYWORDS_GOOGLE_ADS: '/v3/keywords_data/google_ads/keywords_for_keywords/live',
-    KEYWORDS_SUGGESTIONS: '/v3/keywords_data/google_ads/search_volume/live',
+    KEYWORDS_SUGGESTIONS: '/v3/dataforseo_labs/google/keyword_suggestions/live',
     BACKLINKS_OVERVIEW: '/v3/backlinks/summary/live',
     BACKLINKS_BULK: '/v3/backlinks/bulk_backlinks/live',
     DOMAIN_ANALYTICS_OVERVIEW: '/v3/domain_analytics/google/organic/overview/live',
@@ -88,25 +88,33 @@ class DataForSEOConfiguration {
     this.validateEnvironmentVariables();
     
     this.baseUrl = process.env.DATAFORSEO_BASE_URL || 'https://api.dataforseo.com';
-    this.credentials = {
-      username: process.env.DATAFORSEO_USERNAME!,
-      password: process.env.DATAFORSEO_PASSWORD!
-    };
+    
+    // Support both individual credentials and Base64 format
+    if (process.env.DATAFORSEO_BASE64) {
+      const decoded = Buffer.from(process.env.DATAFORSEO_BASE64, 'base64').toString('utf-8');
+      const [username, password] = decoded.split(':');
+      this.credentials = { username, password };
+    } else {
+      this.credentials = {
+        username: process.env.DATAFORSEO_USERNAME!,
+        password: process.env.DATAFORSEO_PASSWORD!
+      };
+    }
+    
     this.environment = (process.env.NODE_ENV as any) || 'development';
   }
 
   private validateEnvironmentVariables(): void {
-    const required = [
-      'DATAFORSEO_USERNAME',
-      'DATAFORSEO_PASSWORD'
-    ];
-
-    const missing = required.filter(key => !process.env[key]);
+    // Check if we have Base64 credentials OR individual credentials
+    const hasBase64 = !!process.env.DATAFORSEO_BASE64;
+    const hasIndividual = !!(process.env.DATAFORSEO_USERNAME && process.env.DATAFORSEO_PASSWORD);
     
-    if (missing.length > 0) {
+    if (!hasBase64 && !hasIndividual) {
       throw new Error(
-        `Missing required DataForSEO environment variables: ${missing.join(', ')}\n` +
-        'Please check your .env file and ensure all required variables are set.'
+        'Missing DataForSEO credentials. Please provide either:\n' +
+        '- DATAFORSEO_BASE64 (Base64 encoded login:password)\n' +
+        '- OR both DATAFORSEO_USERNAME and DATAFORSEO_PASSWORD\n' +
+        'Please check your .env file and ensure credentials are set.'
       );
     }
   }

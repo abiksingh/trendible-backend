@@ -3,6 +3,7 @@ import { getDomainOverview, getDomainTechnologies } from '../services/dataForSEO
 import { handleApiError } from '../utils/dataForSEOErrorHandlers';
 import { logInfo, logError } from '../utils/dataForSEOLogger';
 import { ProcessedResponse } from '../middleware/responseFormatter';
+import { DataForSEOExtractors, DataForSEOResponseHandler } from '../utils/dataForSEOResponseHandler';
 
 interface DomainRequest extends Request {
   body: {
@@ -41,7 +42,19 @@ export const domainController = {
       const response = await getDomainOverview(domainParams);
       const responseTime = Date.now() - startTime;
 
-      const overview: any = response.tasks?.[0]?.result?.[0] || {};
+      // Use defensive extraction - gets first result item safely
+      const overview = DataForSEOExtractors.domainOverview(response);
+      
+      // Get response summary for monitoring
+      const responseSummary = DataForSEOResponseHandler.getResponseSummary(response);
+      
+      // Log warnings if any
+      if (responseSummary.warnings.length > 0) {
+        logInfo('Domain overview response warnings', {
+          warnings: responseSummary.warnings,
+          totalResults: responseSummary.totalResults
+        });
+      }
 
       processedRes.apiSuccess({
         target: domainPattern,
@@ -68,7 +81,12 @@ export const domainController = {
         },
         backlinks_info: overview.backlinks_info || null,
         rank_info: overview.rank_info || null,
-        cost: response.cost || 0
+        cost: responseSummary.totalCost,
+        api_metadata: {
+          total_results: responseSummary.totalResults,
+          successful_tasks: responseSummary.successfulTasks,
+          response_time: responseSummary.responseTime
+        }
       }, {
         response_time_ms: responseTime
       });
@@ -118,7 +136,19 @@ export const domainController = {
       const response = await getDomainTechnologies(techParams);
       const responseTime = Date.now() - startTime;
 
-      const technologies: any = response.tasks?.[0]?.result?.[0] || {};
+      // Use defensive extraction - gets first result item safely
+      const technologies = DataForSEOExtractors.domainTechnologies(response);
+      
+      // Get response summary for monitoring
+      const responseSummary = DataForSEOResponseHandler.getResponseSummary(response);
+      
+      // Log warnings if any
+      if (responseSummary.warnings.length > 0) {
+        logInfo('Domain technologies response warnings', {
+          warnings: responseSummary.warnings,
+          totalResults: responseSummary.totalResults
+        });
+      }
 
       // Organize technologies by category
       const organizedTech: any = {
@@ -164,7 +194,12 @@ export const domainController = {
               count: (techs as any[]).length
             }))
         },
-        cost: response.cost || 0
+        cost: responseSummary.totalCost,
+        api_metadata: {
+          total_results: responseSummary.totalResults,
+          successful_tasks: responseSummary.successfulTasks,
+          response_time: responseSummary.responseTime
+        }
       }, {
         response_time_ms: responseTime
       });
@@ -207,12 +242,29 @@ export const domainController = {
       // Get overview for each domain
       const comparisonPromises = domains.map((domain: string) =>
         getDomainOverview({ target: domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '') })
-          .then(response => ({
-            domain: domain.trim(),
-            success: true,
-            data: response.tasks?.[0]?.result?.[0] || {},
-            cost: response.cost || 0
-          }))
+          .then(response => {
+            try {
+              const data = DataForSEOExtractors.domainOverview(response);
+              const summary = DataForSEOResponseHandler.getResponseSummary(response);
+              return {
+                domain: domain.trim(),
+                success: true,
+                data,
+                cost: summary.totalCost,
+                metadata: {
+                  total_results: summary.totalResults,
+                  warnings: summary.warnings
+                }
+              };
+            } catch (extractError) {
+              return {
+                domain: domain.trim(),
+                success: false,
+                error: `Data extraction failed: ${extractError instanceof Error ? extractError.message : 'Unknown error'}`,
+                cost: response?.cost || 0
+              };
+            }
+          })
           .catch(error => ({
             domain: domain.trim(),
             success: false,

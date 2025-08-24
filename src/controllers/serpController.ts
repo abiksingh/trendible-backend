@@ -3,6 +3,7 @@ import { searchGoogleOrganic } from '../services/dataForSEOFunctional';
 import { handleApiError } from '../utils/dataForSEOErrorHandlers';
 import { logInfo, logError } from '../utils/dataForSEOLogger';
 import { ProcessedResponse } from '../middleware/responseFormatter';
+import { DataForSEOExtractors, DataForSEOResponseHandler } from '../utils/dataForSEOResponseHandler';
 
 interface SerpRequest extends Request {
   body: {
@@ -42,15 +43,18 @@ export const serpController = {
       const response = await searchGoogleOrganic(searchParams);
       const responseTime = Date.now() - startTime;
 
+      const results = DataForSEOExtractors.serpResults(response);
+      const responseSummary = DataForSEOResponseHandler.getResponseSummary(response);
+
       processedRes.json({
         success: true,
         data: {
           keyword: keyword.trim(),
           location_code: location_code || 2840,
           language_code: language_code || 'en',
-          results: response.tasks?.[0]?.result || [],
-          total_results: response.tasks?.[0]?.result?.length || 0,
-          cost: response.cost || 0
+          results,
+          total_results: results.length,
+          cost: responseSummary.totalCost
         },
         meta: {
           response_time_ms: responseTime,
@@ -153,12 +157,25 @@ export const serpController = {
         data: {
           successful_searches: successfulResults.length,
           failed_searches: failedResults.length,
-          results: successfulResults.map((result: any) => ({
-            keyword: result.tasks?.[0]?.data?.keyword || 'unknown',
-            results: result.tasks?.[0]?.result || [],
-            total_results: result.tasks?.[0]?.result?.length || 0,
-            cost: result.cost || 0
-          })),
+          results: successfulResults.map((result: any) => {
+            try {
+              const serpResults = DataForSEOExtractors.serpResults(result);
+              return {
+                keyword: result.tasks?.[0]?.data?.keyword || 'unknown',
+                results: serpResults,
+                total_results: serpResults.length,
+                cost: result.cost || 0
+              };
+            } catch (extractError) {
+              return {
+                keyword: result.tasks?.[0]?.data?.keyword || 'unknown',
+                results: [],
+                total_results: 0,
+                cost: result.cost || 0,
+                extraction_error: extractError instanceof Error ? extractError.message : 'Unknown extraction error'
+              };
+            }
+          }),
           errors: failedResults.map((result: any) => ({
             keyword: result.keyword,
             error: result.error.message,

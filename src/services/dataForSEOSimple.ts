@@ -105,13 +105,13 @@ export const getKeywordSuggestions = async (params: SimpleKeywordRequest) => {
   const client = createHttpClient();
   
   return withRetry(async () => {
-    const data = {
+    const data = [{
       keywords: params.keywords,
       location_code: params.location_code || 2840,
       language_code: params.language_code || 'en'
-    };
+    }];
 
-    return await client.post('/v3/keywords_data/google/keyword_suggestions/live', data);
+    return await client.post(dataForSEOConfig.endpoints.KEYWORDS_SUGGESTIONS, data);
   }, 'getKeywordSuggestions');
 };
 
@@ -120,10 +120,10 @@ export const getBacklinksOverview = async (params: SimpleBacklinksRequest) => {
   const client = createHttpClient();
   
   return withRetry(async () => {
-    const data = {
+    const data = [{
       target: params.target,
       include_subdomains: params.include_subdomains || false
-    };
+    }];
 
     return await client.post('/v3/backlinks/summary/live', data);
   }, 'getBacklinksOverview');
@@ -133,12 +133,12 @@ export const getBulkBacklinks = async (params: SimpleBacklinksRequest) => {
   const client = createHttpClient();
   
   return withRetry(async () => {
-    const data = {
+    const data = [{
       target: params.target,
       limit: params.limit || 100,
       offset: params.offset || 0,
       include_subdomains: params.include_subdomains || false
-    };
+    }];
 
     return await client.post('/v3/backlinks/backlinks/live', data);
   }, 'getBulkBacklinks');

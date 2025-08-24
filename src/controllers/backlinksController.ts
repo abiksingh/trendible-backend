@@ -3,6 +3,7 @@ import { getBacklinksOverview, getBulkBacklinks } from '../services/dataForSEOFu
 import { handleApiError } from '../utils/dataForSEOErrorHandlers';
 import { logInfo, logError } from '../utils/dataForSEOLogger';
 import { ProcessedResponse } from '../middleware/responseFormatter';
+import { DataForSEOExtractors, DataForSEOResponseHandler } from '../utils/dataForSEOResponseHandler';
 
 interface BacklinksRequest extends Request {
   body: {
@@ -37,7 +38,19 @@ export const backlinksController = {
       const response = await getBacklinksOverview(backlinksParams);
       const responseTime = Date.now() - startTime;
 
-      const overview: any = response.tasks?.[0]?.result?.[0] || {};
+      // Use defensive extraction - gets first result item safely
+      const overview = DataForSEOExtractors.backlinksOverview(response);
+      
+      // Get response summary for monitoring
+      const responseSummary = DataForSEOResponseHandler.getResponseSummary(response);
+      
+      // Log warnings if any
+      if (responseSummary.warnings.length > 0) {
+        logInfo('Backlinks overview response warnings', {
+          warnings: responseSummary.warnings,
+          totalResults: responseSummary.totalResults
+        });
+      }
 
       processedRes.apiSuccess({
         target: cleanTarget,
@@ -113,7 +126,7 @@ export const backlinksController = {
       const response = await getBulkBacklinks(backlinksParams);
       const responseTime = Date.now() - startTime;
 
-      const backlinks = response.tasks?.[0]?.result || [];
+      const backlinks = DataForSEOExtractors.backlinksList(response);
 
       processedRes.apiSuccess({
         target: cleanTarget,
@@ -190,7 +203,7 @@ export const backlinksController = {
         getBacklinksOverview({ target: domain.trim() })
           .then(response => ({
             domain: domain.trim(),
-            data: response.tasks?.[0]?.result?.[0] || {},
+            data: DataForSEOExtractors.backlinksOverview(response),
             cost: response.cost || 0
           }))
           .catch(error => ({
@@ -207,7 +220,7 @@ export const backlinksController = {
       const competitorData: any[] = results.slice(1);
       const totalCost = results.reduce((sum, result) => sum + result.cost, 0);
 
-      // Calculate gap analysis
+      // Calculate gap analysis using defensive data access
       const analysis = {
         your_domain: {
           domain: your_domain,
