@@ -3,6 +3,7 @@ import serpRoutes from './serpRoutes';
 import keywordsRoutes from './keywordsRoutes';
 import backlinksRoutes from './backlinksRoutes';
 import domainRoutes from './domainRoutes';
+import researchRoutes from './researchRoutes';
 import { initializeDataForSEO, getServiceStatus } from '../services/dataForSEOFunctional';
 
 const router = Router();
@@ -12,6 +13,7 @@ router.use('/serp', serpRoutes);
 router.use('/keywords', keywordsRoutes);
 router.use('/backlinks', backlinksRoutes);
 router.use('/domains', domainRoutes);
+router.use('/research', researchRoutes);
 
 // Service status and health check routes
 router.get('/status', async (req, res) => {
@@ -44,6 +46,9 @@ router.get('/status', async (req, res) => {
           'POST /api/seo/domains/overview - Domain WHOIS and overview',
           'POST /api/seo/domains/technologies - Technology stack analysis',
           'POST /api/seo/domains/compare - Multi-domain comparison'
+        ],
+        research: [
+          'POST /api/seo/research/keyword-intelligence - Comprehensive keyword analysis'
         ]
       },
       timestamp: new Date().toISOString()
@@ -120,6 +125,22 @@ router.get('/docs', (req, res) => {
         },
         example: {
           target: 'example.com'
+        }
+      },
+      '/research/keyword-intelligence': {
+        method: 'POST',
+        description: 'Get comprehensive keyword analysis with search volume, competition, intent, trends, and SERP features',
+        body: {
+          keyword: 'string (required) - Target keyword to analyze',
+          location_code: 'number (optional) - Location code (default: 2840 US)',
+          language_code: 'string (optional) - Language code (default: en)',
+          sources: 'array (optional) - Data sources to query (default: ["google"])'
+        },
+        example: {
+          keyword: 'nodejs tutorial',
+          location_code: 2840,
+          language_code: 'en',
+          sources: ['google']
         }
       }
     },

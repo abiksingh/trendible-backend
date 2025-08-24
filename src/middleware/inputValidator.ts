@@ -287,6 +287,15 @@ export const seoValidationSchemas = {
     ]
   },
 
+  keywordIntelligence: {
+    body: [
+      { field: 'keyword', type: 'string' as const, required: true, min: 1, max: 200 },
+      { field: 'location_code', type: 'number' as const, min: 1, max: 9999 },
+      { field: 'language_code', type: 'string' as const, pattern: /^[a-z]{2}(-[A-Z]{2})?$/ },
+      { field: 'sources', type: 'array' as const, max: 10 }
+    ]
+  },
+
   domainOverview: {
     body: [
       { 
