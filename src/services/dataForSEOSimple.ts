@@ -1,6 +1,4 @@
-// Simplified Functional DataForSEO Operations
-import * as client from 'dataforseo-client';
-import { createDataForSEOClients } from '../utils/dataForSEOClient';
+// Simplified HTTP-based DataForSEO Operations
 import { withRetry, handleApiError } from '../utils/dataForSEOErrorHandlers';
 import { logApiCall, logApiCost, logInfo } from '../utils/dataForSEOLogger';
 import { dataForSEOConfig } from '../config/dataForSEOConfig';
@@ -33,241 +31,178 @@ export interface SimpleDomainRequest {
   language_code?: string;
 }
 
+// HTTP client utility
+const createHttpClient = () => {
+  const baseURL = dataForSEOConfig.baseUrl;
+  const auth = btoa(`${dataForSEOConfig.credentials.username}:${dataForSEOConfig.credentials.password}`);
+  
+  return {
+    async post(endpoint: string, data: any) {
+      const url = `${baseURL}${endpoint}`;
+      const startTime = Date.now();
+      
+      logApiCall(`POST ${endpoint}`, { 
+        endpoint,
+        requestData: data
+      }, startTime);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify([data])
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.cost) {
+        logApiCost(endpoint, result.cost);
+      }
+
+      return result;
+    }
+  };
+};
+
 // SERP Operations
 export const searchGoogleOrganic = async (params: SimpleSearchRequest) => {
-  const startTime = Date.now();
-  const endpoint = dataForSEOConfig.endpoints.SERP_GOOGLE_ORGANIC;
-  
-  logInfo('Starting Google organic search', params);
+  const client = createHttpClient();
   
   return withRetry(async () => {
-    const clients = createDataForSEOClients();
-    
-    const task = new client.SerpGoogleOrganicLiveAdvancedRequestInfo();
-    task.keyword = params.keyword;
-    task.location_code = params.location_code || dataForSEOConfig.defaults.LOCATION_CODE;
-    task.language_code = params.language_code || dataForSEOConfig.defaults.LANGUAGE_CODE;
-    task.device = params.device || dataForSEOConfig.defaults.DEVICE;
-    
-    if (params.location_name) task.location_name = params.location_name;
-    
-    const response = await clients.serp.googleOrganicLiveAdvanced([task]);
-    
-    if (!response) {
-      throw new Error('No response received from DataForSEO API');
-    }
+    const data = {
+      keyword: params.keyword,
+      location_code: params.location_code || 2840,
+      language_code: params.language_code || 'en',
+      device: params.device || 'desktop'
+    };
 
-    logApiCall(endpoint, params, startTime);
-    if (response.cost && response.cost > 0) logApiCost(endpoint, response.cost);
-
-    return response;
-  }, endpoint);
+    return await client.post('/v3/serp/google/organic/live/advanced', data);
+  }, 'searchGoogleOrganic');
 };
 
 // Keywords Operations
 export const getKeywordData = async (params: SimpleKeywordRequest) => {
-  const startTime = Date.now();
-  const endpoint = dataForSEOConfig.endpoints.KEYWORDS_GOOGLE_ADS;
-  
-  logInfo('Getting keyword data', { 
-    keywords: params.keywords.slice(0, 5), 
-    count: params.keywords.length 
-  });
+  const client = createHttpClient();
   
   return withRetry(async () => {
-    const clients = createDataForSEOClients();
-    
-    const task = new client.KeywordsDataGoogleAdsKeywordsForKeywordsLiveRequestInfo();
-    task.keywords = params.keywords.slice(0, 20); // API limit
-    task.location_code = params.location_code || dataForSEOConfig.defaults.LOCATION_CODE;
-    task.language_code = params.language_code || dataForSEOConfig.defaults.LANGUAGE_CODE;
-    
-    const response = await clients.keywords.googleAdsKeywordsForKeywordsLive([task]);
-    
-    if (!response) {
-      throw new Error('No response received from DataForSEO API');
-    }
+    const data = {
+      keywords: params.keywords,
+      location_code: params.location_code || 2840,
+      language_code: params.language_code || 'en'
+    };
 
-    logApiCall(endpoint, params, startTime);
-    if (response.cost && response.cost > 0) logApiCost(endpoint, response.cost);
-
-    return response;
-  }, endpoint);
+    return await client.post('/v3/keywords_data/google/search_volume/live', data);
+  }, 'getKeywordData');
 };
 
 export const getKeywordSuggestions = async (params: SimpleKeywordRequest) => {
-  const startTime = Date.now();
-  const endpoint = dataForSEOConfig.endpoints.KEYWORDS_SUGGESTIONS;
-  
-  logInfo('Getting keyword suggestions', params);
+  const client = createHttpClient();
   
   return withRetry(async () => {
-    const clients = createDataForSEOClients();
-    
-    const task = new client.KeywordsDataGoogleAdsSearchVolumeLiveRequestInfo();
-    task.keywords = params.keywords;
-    task.location_code = params.location_code || dataForSEOConfig.defaults.LOCATION_CODE;
-    task.language_code = params.language_code || dataForSEOConfig.defaults.LANGUAGE_CODE;
-    
-    const response = await clients.keywords.googleAdsSearchVolumeLive([task]);
-    
-    if (!response) {
-      throw new Error('No response received from DataForSEO API');
-    }
+    const data = {
+      keywords: params.keywords,
+      location_code: params.location_code || 2840,
+      language_code: params.language_code || 'en'
+    };
 
-    logApiCall(endpoint, params, startTime);
-    if (response.cost && response.cost > 0) logApiCost(endpoint, response.cost);
-
-    return response;
-  }, endpoint);
+    return await client.post('/v3/keywords_data/google/keyword_suggestions/live', data);
+  }, 'getKeywordSuggestions');
 };
 
-// Backlinks Operations
+// Backlinks Operations  
 export const getBacklinksOverview = async (params: SimpleBacklinksRequest) => {
-  const startTime = Date.now();
-  const endpoint = dataForSEOConfig.endpoints.BACKLINKS_OVERVIEW;
-  
-  logInfo('Getting backlinks overview', params);
+  const client = createHttpClient();
   
   return withRetry(async () => {
-    const clients = createDataForSEOClients();
-    
-    const task = new client.BacklinksSummaryLiveRequestInfo();
-    task.target = params.target;
-    
-    if (params.include_subdomains !== undefined) {
-      task.include_subdomains = params.include_subdomains;
-    }
-    
-    const response = await clients.backlinks.summaryLive([task]);
-    
-    if (!response) {
-      throw new Error('No response received from DataForSEO API');
-    }
+    const data = {
+      target: params.target,
+      include_subdomains: params.include_subdomains || false
+    };
 
-    logApiCall(endpoint, params, startTime);
-    if (response.cost && response.cost > 0) logApiCost(endpoint, response.cost);
-
-    return response;
-  }, endpoint);
+    return await client.post('/v3/backlinks/summary/live', data);
+  }, 'getBacklinksOverview');
 };
 
 export const getBulkBacklinks = async (params: SimpleBacklinksRequest) => {
-  const startTime = Date.now();
-  const endpoint = dataForSEOConfig.endpoints.BACKLINKS_BULK;
-  
-  logInfo('Getting bulk backlinks', params);
+  const client = createHttpClient();
   
   return withRetry(async () => {
-    const clients = createDataForSEOClients();
-    
-    const task = new client.BacklinksBulkBacklinksLiveRequestInfo();
-    task.target = params.target;
-    
-    if (params.limit) task.limit = params.limit;
-    if (params.offset) task.offset = params.offset;
-    
-    const response = await clients.backlinks.bulkBacklinksLive([task]);
-    
-    if (!response) {
-      throw new Error('No response received from DataForSEO API');
-    }
+    const data = {
+      target: params.target,
+      limit: params.limit || 100,
+      offset: params.offset || 0,
+      include_subdomains: params.include_subdomains || false
+    };
 
-    logApiCall(endpoint, params, startTime);
-    if (response.cost && response.cost > 0) logApiCost(endpoint, response.cost);
-
-    return response;
-  }, endpoint);
+    return await client.post('/v3/backlinks/backlinks/live', data);
+  }, 'getBulkBacklinks');
 };
 
 // Domain Operations
 export const getDomainOverview = async (params: SimpleDomainRequest) => {
-  const startTime = Date.now();
-  const endpoint = '/v3/domain_analytics/whois/overview/live';
-  
-  logInfo('Getting domain analytics overview', params);
+  const client = createHttpClient();
   
   return withRetry(async () => {
-    const clients = createDataForSEOClients();
-    
-    const task = new client.DomainAnalyticsWhoisOverviewLiveRequestInfo();
-    task.target = params.target;
-    
-    const response = await clients.domainAnalytics.whoisOverviewLive([task]);
-    
-    if (!response) {
-      throw new Error('No response received from DataForSEO API');
-    }
+    const data = {
+      target: params.target
+    };
 
-    logApiCall(endpoint, params, startTime);
-    if (response.cost && response.cost > 0) logApiCost(endpoint, response.cost);
-
-    return response;
-  }, endpoint);
+    return await client.post('/v3/domain_analytics/whois/overview/live', data);
+  }, 'getDomainOverview');
 };
 
 export const getDomainTechnologies = async (params: SimpleDomainRequest) => {
-  const startTime = Date.now();
-  const endpoint = dataForSEOConfig.endpoints.DOMAIN_ANALYTICS_TECH;
-  
-  logInfo('Getting domain technologies', params);
+  const client = createHttpClient();
   
   return withRetry(async () => {
-    const clients = createDataForSEOClients();
-    
-    const task = new client.DomainAnalyticsTechnologiesDomainTechnologiesLiveRequestInfo();
-    task.target = params.target;
-    
-    const response = await clients.domainAnalytics.technologiesDomainTechnologiesLive([task]);
-    
-    if (!response) {
-      throw new Error('No response received from DataForSEO API');
-    }
+    const data = {
+      target: params.target
+    };
 
-    logApiCall(endpoint, params, startTime);
-    if (response.cost && response.cost > 0) logApiCost(endpoint, response.cost);
-
-    return response;
-  }, endpoint);
+    return await client.post('/v3/domain_analytics/technologies/domain_technologies/live', data);
+  }, 'getDomainTechnologies');
 };
 
-// Batch operations
-export const batchKeywordAnalysis = async (
-  keywords: string[],
-  options?: { location_code?: number; language_code?: string; }
-) => {
-  logInfo('Starting batch keyword analysis', { 
-    keywords: keywords.slice(0, 5), 
-    count: keywords.length 
-  });
-
-  const keywordParams: SimpleKeywordRequest = {
-    keywords,
-    location_code: options?.location_code,
-    language_code: options?.language_code
-  };
-
+// Batch Operations
+export const batchKeywordAnalysis = async (keywords: string[], options: { location_code?: number; language_code?: string } = {}) => {
   try {
-    const [keywordData, ...serpResults] = await Promise.allSettled([
-      getKeywordData(keywordParams),
-      ...keywords.slice(0, 5).map(keyword => 
-        searchGoogleOrganic({ 
-          keyword, 
-          location_code: options?.location_code,
-          language_code: options?.language_code
-        })
-      )
+    // Get keyword data
+    const keywordDataPromise = getKeywordData({
+      keywords,
+      location_code: options.location_code,
+      language_code: options.language_code
+    }).catch(error => {
+      logInfo('Keyword data request failed in batch', { error: error.message });
+      return null;
+    });
+
+    // Get SERP data for each keyword
+    const serpPromises = keywords.map(keyword => 
+      searchGoogleOrganic({
+        keyword,
+        location_code: options.location_code,
+        language_code: options.language_code
+      }).then(data => ({ keyword, data, error: null }))
+      .catch(error => ({ keyword, data: null, error: error.message }))
+    );
+
+    const [keywordData, ...serpResults] = await Promise.all([
+      keywordDataPromise,
+      ...serpPromises
     ]);
 
     return {
-      keywordData: keywordData.status === 'fulfilled' ? keywordData.value : null,
-      serpResults: serpResults.map((result, index) => ({
-        keyword: keywords[index],
-        data: result.status === 'fulfilled' ? result.value : null,
-        error: result.status === 'rejected' ? result.reason : null
-      }))
+      keywordData,
+      serpResults
     };
   } catch (error) {
+    logInfo('Batch keyword analysis failed', { error });
     throw handleApiError(error, 'batchKeywordAnalysis');
   }
 };

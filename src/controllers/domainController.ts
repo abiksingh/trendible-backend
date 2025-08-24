@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { getDomainOverview, getDomainTechnologies } from '../services/dataForSEOFunctional';
 import { handleApiError } from '../utils/dataForSEOErrorHandlers';
 import { logInfo, logError } from '../utils/dataForSEOLogger';
+import { ProcessedResponse } from '../middleware/responseFormatter';
 
 interface DomainRequest extends Request {
   body: {
@@ -13,33 +14,17 @@ interface DomainRequest extends Request {
 
 export const domainController = {
   async getOverview(req: DomainRequest, res: Response) {
+    const processedRes = res as ProcessedResponse;
     const startTime = Date.now();
     
     try {
       const { target, location_code, language_code } = req.body;
 
-      // Input validation
-      if (!target || typeof target !== 'string' || target.trim().length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'Target domain is required',
-          code: 'INVALID_TARGET'
-        });
-      }
-
-      // Basic domain validation
+      // Input validation is now handled by middleware
       const cleanTarget = target.trim().toLowerCase();
       
       // Remove protocol if present
       const domainPattern = cleanTarget.replace(/^https?:\/\//, '').replace(/\/$/, '');
-      
-      if (domainPattern.length > 253) {
-        return res.status(400).json({
-          success: false,
-          error: 'Domain name is too long (max 253 characters)',
-          code: 'DOMAIN_TOO_LONG'
-        });
-      }
 
       logInfo('Domain overview request', {
         target: domainPattern,
@@ -58,40 +43,34 @@ export const domainController = {
 
       const overview: any = response.tasks?.[0]?.result?.[0] || {};
 
-      res.json({
-        success: true,
-        data: {
-          target: domainPattern,
-          location_code: location_code || 2840,
-          language_code: language_code || 'en',
-          whois: {
-            domain_name: overview.domain,
-            created_datetime: overview.created_datetime,
-            changed_datetime: overview.changed_datetime,
-            expiry_datetime: overview.expiry_datetime,
-            updated_datetime: overview.updated_datetime,
-            registrar: {
-              name: overview.registrar?.registrar_name,
-              url: overview.registrar?.url,
-              phone: overview.registrar?.phone,
-              email: overview.registrar?.email
-            },
-            contacts: {
-              registrant: overview.registrant || null,
-              administrative: overview.administrative || null,
-              technical: overview.technical || null,
-              billing: overview.billing || null
-            }
+      processedRes.apiSuccess({
+        target: domainPattern,
+        location_code: location_code || 2840,
+        language_code: language_code || 'en',
+        whois: {
+          domain_name: overview.domain,
+          created_datetime: overview.created_datetime,
+          changed_datetime: overview.changed_datetime,
+          expiry_datetime: overview.expiry_datetime,
+          updated_datetime: overview.updated_datetime,
+          registrar: {
+            name: overview.registrar?.registrar_name,
+            url: overview.registrar?.url,
+            phone: overview.registrar?.phone,
+            email: overview.registrar?.email
           },
-          backlinks_info: overview.backlinks_info || null,
-          rank_info: overview.rank_info || null,
-          cost: response.cost || 0
+          contacts: {
+            registrant: overview.registrant || null,
+            administrative: overview.administrative || null,
+            technical: overview.technical || null,
+            billing: overview.billing || null
+          }
         },
-        meta: {
-          response_time_ms: responseTime,
-          timestamp: new Date().toISOString(),
-          api_version: 'v1'
-        }
+        backlinks_info: overview.backlinks_info || null,
+        rank_info: overview.rank_info || null,
+        cost: response.cost || 0
+      }, {
+        response_time_ms: responseTime
       });
 
     } catch (error) {
@@ -103,36 +82,28 @@ export const domainController = {
         responseTime
       });
 
-      res.status(dataForSEOError.statusCode || 500).json({
-        success: false,
-        error: dataForSEOError.message,
-        code: dataForSEOError.statusCode === 402 ? 'INSUFFICIENT_CREDITS' :
-              dataForSEOError.statusCode === 429 ? 'RATE_LIMIT_EXCEEDED' :
-              'API_ERROR',
-        cost: dataForSEOError.cost || 0,
-        retryable: dataForSEOError.retryable,
-        meta: {
-          response_time_ms: responseTime,
-          timestamp: new Date().toISOString()
+      processedRes.status(dataForSEOError.statusCode || 500).apiError(
+        dataForSEOError.message,
+        dataForSEOError.statusCode === 402 ? 'INSUFFICIENT_CREDITS' :
+        dataForSEOError.statusCode === 429 ? 'RATE_LIMIT_EXCEEDED' :
+        'API_ERROR',
+        {
+          cost: dataForSEOError.cost || 0,
+          retryable: dataForSEOError.retryable,
+          response_time_ms: responseTime
         }
-      });
+      );
     }
   },
 
   async getTechnologies(req: DomainRequest, res: Response) {
+    const processedRes = res as ProcessedResponse;
     const startTime = Date.now();
     
     try {
       const { target } = req.body;
 
-      // Input validation
-      if (!target || typeof target !== 'string' || target.trim().length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'Target domain is required',
-          code: 'INVALID_TARGET'
-        });
-      }
+      // Input validation is now handled by middleware
 
       const cleanTarget = target.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
 
@@ -175,33 +146,27 @@ export const domainController = {
         });
       }
 
-      res.json({
-        success: true,
-        data: {
-          target: cleanTarget,
-          domain_info: {
-            domain: technologies.domain,
-            title: technologies.title,
-            description: technologies.description,
-            meta_keywords: technologies.meta_keywords
-          },
-          technologies: organizedTech,
-          technology_summary: {
-            total_technologies: Object.values(organizedTech).flat().length,
-            categories_detected: Object.entries(organizedTech)
-              .filter(([_, techs]) => Array.isArray(techs) && techs.length > 0)
-              .map(([category, techs]) => ({
-                category: category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                count: (techs as any[]).length
-              }))
-          },
-          cost: response.cost || 0
+      processedRes.apiSuccess({
+        target: cleanTarget,
+        domain_info: {
+          domain: technologies.domain,
+          title: technologies.title,
+          description: technologies.description,
+          meta_keywords: technologies.meta_keywords
         },
-        meta: {
-          response_time_ms: responseTime,
-          timestamp: new Date().toISOString(),
-          api_version: 'v1'
-        }
+        technologies: organizedTech,
+        technology_summary: {
+          total_technologies: Object.values(organizedTech).flat().length,
+          categories_detected: Object.entries(organizedTech)
+            .filter(([_, techs]) => Array.isArray(techs) && techs.length > 0)
+            .map(([category, techs]) => ({
+              category: category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+              count: (techs as any[]).length
+            }))
+        },
+        cost: response.cost || 0
+      }, {
+        response_time_ms: responseTime
       });
 
     } catch (error) {
@@ -213,57 +178,30 @@ export const domainController = {
         responseTime
       });
 
-      res.status(dataForSEOError.statusCode || 500).json({
-        success: false,
-        error: dataForSEOError.message,
-        code: 'TECHNOLOGIES_ERROR',
-        cost: dataForSEOError.cost || 0,
-        retryable: dataForSEOError.retryable,
-        meta: {
-          response_time_ms: responseTime,
-          timestamp: new Date().toISOString()
+      processedRes.status(dataForSEOError.statusCode || 500).apiError(
+        dataForSEOError.message,
+        'TECHNOLOGIES_ERROR',
+        {
+          cost: dataForSEOError.cost || 0,
+          retryable: dataForSEOError.retryable,
+          response_time_ms: responseTime
         }
-      });
+      );
     }
   },
 
   async compareCompetitors(req: Request, res: Response) {
+    const processedRes = res as ProcessedResponse;
     const startTime = Date.now();
     
     try {
       const { domains } = req.body;
 
-      // Input validation
-      if (!Array.isArray(domains) || domains.length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'Domains array is required and must not be empty',
-          code: 'INVALID_DOMAINS'
-        });
-      }
-
-      if (domains.length > 10) {
-        return res.status(400).json({
-          success: false,
-          error: 'Maximum 10 domains allowed for comparison',
-          code: 'TOO_MANY_DOMAINS'
-        });
-      }
-
-      // Validate each domain
-      for (const domain of domains) {
-        if (typeof domain !== 'string' || domain.trim().length === 0) {
-          return res.status(400).json({
-            success: false,
-            error: 'All domains must be non-empty strings',
-            code: 'INVALID_DOMAIN_FORMAT'
-          });
-        }
-      }
+      // Input validation is now handled by middleware
 
       logInfo('Domain comparison request', {
         domain_count: domains.length,
-        domains: domains.slice(0, 5).map(d => d.substring(0, 50))
+        domains: domains.slice(0, 5).map((d: string) => d.substring(0, 50))
       });
 
       // Get overview for each domain
@@ -325,14 +263,8 @@ export const domainController = {
         total_cost: totalCost
       };
 
-      res.json({
-        success: true,
-        data: comparison,
-        meta: {
-          response_time_ms: responseTime,
-          timestamp: new Date().toISOString(),
-          api_version: 'v1'
-        }
+      processedRes.apiSuccess(comparison, {
+        response_time_ms: responseTime
       });
 
     } catch (error) {
@@ -344,16 +276,14 @@ export const domainController = {
         responseTime
       });
 
-      res.status(dataForSEOError.statusCode || 500).json({
-        success: false,
-        error: dataForSEOError.message,
-        code: 'DOMAIN_COMPARISON_ERROR',
-        cost: dataForSEOError.cost || 0,
-        meta: {
-          response_time_ms: responseTime,
-          timestamp: new Date().toISOString()
+      processedRes.status(dataForSEOError.statusCode || 500).apiError(
+        dataForSEOError.message,
+        'DOMAIN_COMPARISON_ERROR',
+        {
+          cost: dataForSEOError.cost || 0,
+          response_time_ms: responseTime
         }
-      });
+      );
     }
   }
 };

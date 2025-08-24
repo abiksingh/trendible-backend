@@ -1,9 +1,5 @@
 // Functional DataForSEO Service - Main Entry Point
-import {
-  createDataForSEOClients,
-  testDataForSEOConnection,
-  getDataForSEOConfig
-} from '../utils/dataForSEOClient';
+import { dataForSEOConfig } from '../config/dataForSEOConfig';
 
 import {
   searchGoogleOrganic,
@@ -38,12 +34,38 @@ import {
   logApiCost
 } from '../utils/dataForSEOLogger';
 
+// Simple connection test utility
+export const testDataForSEOConnection = async (): Promise<boolean> => {
+  const endpoint = '/v3/user';
+  
+  try {
+    const response = await fetch(`${dataForSEOConfig.baseUrl}${endpoint}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Basic ${btoa(`${dataForSEOConfig.credentials.username}:${dataForSEOConfig.credentials.password}`)}`
+      }
+    });
+    
+    return response.ok;
+  } catch (error) {
+    logError('DataForSEO connection test failed', error);
+    return false;
+  }
+};
+
+// Configuration getter
+export const getDataForSEOConfig = () => ({
+  endpoints: dataForSEOConfig.endpoints,
+  defaults: dataForSEOConfig.defaults,
+  rateLimits: dataForSEOConfig.rateLimits,
+  locations: dataForSEOConfig.getLocationOptions(),
+  languages: dataForSEOConfig.getLanguageOptions(),
+  devices: dataForSEOConfig.getDeviceOptions(),
+  costLimits: dataForSEOConfig.getCostLimits()
+});
+
 // Re-export all functional utilities for easy access
 export {
-  // Client utilities
-  createDataForSEOClients,
-  testDataForSEOConnection,
-  getDataForSEOConfig,
   
   // SERP operations
   searchGoogleOrganic,

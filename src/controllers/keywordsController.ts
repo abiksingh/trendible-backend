@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { getKeywordData, getKeywordSuggestions, batchKeywordAnalysis } from '../services/dataForSEOFunctional';
 import { handleApiError } from '../utils/dataForSEOErrorHandlers';
 import { logInfo, logError } from '../utils/dataForSEOLogger';
+import { ProcessedResponse } from '../middleware/responseFormatter';
 
 interface KeywordsRequest extends Request {
   body: {
@@ -13,38 +14,13 @@ interface KeywordsRequest extends Request {
 
 export const keywordsController = {
   async getKeywordData(req: KeywordsRequest, res: Response) {
+    const processedRes = res as ProcessedResponse;
     const startTime = Date.now();
     
     try {
       const { keywords, location_code, language_code } = req.body;
 
-      // Input validation
-      if (!Array.isArray(keywords) || keywords.length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'Keywords must be a non-empty array',
-          code: 'INVALID_KEYWORDS'
-        });
-      }
-
-      if (keywords.length > 20) {
-        return res.status(400).json({
-          success: false,
-          error: 'Maximum 20 keywords allowed per request (API limit)',
-          code: 'TOO_MANY_KEYWORDS'
-        });
-      }
-
-      // Validate each keyword
-      for (const keyword of keywords) {
-        if (typeof keyword !== 'string' || keyword.trim().length === 0) {
-          return res.status(400).json({
-            success: false,
-            error: 'All keywords must be non-empty strings',
-            code: 'INVALID_KEYWORD_FORMAT'
-          });
-        }
-      }
+      // Input validation is now handled by middleware
 
       logInfo('Keywords data request', {
         keyword_count: keywords.length,
@@ -64,29 +40,23 @@ export const keywordsController = {
 
       const keywordResults = response.tasks?.[0]?.result || [];
 
-      res.json({
-        success: true,
-        data: {
-          total_keywords: keywordResults.length,
-          location_code: location_code || 2840,
-          language_code: language_code || 'en',
-          keywords: keywordResults.map(item => ({
-            keyword: item.keyword,
-            search_volume: item.search_volume || 0,
-            competition: item.competition || 0,
-            competition_level: item.competition_level,
-            cpc: item.cpc || 0,
-            monthly_searches: item.monthly_searches || [],
-            low_top_of_page_bid: item.low_top_of_page_bid || 0,
-            high_top_of_page_bid: item.high_top_of_page_bid || 0
-          })),
-          cost: response.cost || 0
-        },
-        meta: {
-          response_time_ms: responseTime,
-          timestamp: new Date().toISOString(),
-          api_version: 'v1'
-        }
+      processedRes.apiSuccess({
+        total_keywords: keywordResults.length,
+        location_code: location_code || 2840,
+        language_code: language_code || 'en',
+        keywords: keywordResults.map((item: any) => ({
+          keyword: item.keyword,
+          search_volume: item.search_volume || 0,
+          competition: item.competition || 0,
+          competition_level: item.competition_level,
+          cpc: item.cpc || 0,
+          monthly_searches: item.monthly_searches || [],
+          low_top_of_page_bid: item.low_top_of_page_bid || 0,
+          high_top_of_page_bid: item.high_top_of_page_bid || 0
+        })),
+        cost: response.cost || 0
+      }, {
+        response_time_ms: responseTime
       });
 
     } catch (error) {
@@ -98,44 +68,28 @@ export const keywordsController = {
         responseTime
       });
 
-      res.status(dataForSEOError.statusCode || 500).json({
-        success: false,
-        error: dataForSEOError.message,
-        code: dataForSEOError.statusCode === 402 ? 'INSUFFICIENT_CREDITS' :
-              dataForSEOError.statusCode === 429 ? 'RATE_LIMIT_EXCEEDED' :
-              'API_ERROR',
-        cost: dataForSEOError.cost || 0,
-        retryable: dataForSEOError.retryable,
-        meta: {
-          response_time_ms: responseTime,
-          timestamp: new Date().toISOString()
+      processedRes.status(dataForSEOError.statusCode || 500).apiError(
+        dataForSEOError.message,
+        dataForSEOError.statusCode === 402 ? 'INSUFFICIENT_CREDITS' :
+        dataForSEOError.statusCode === 429 ? 'RATE_LIMIT_EXCEEDED' :
+        'API_ERROR',
+        {
+          cost: dataForSEOError.cost || 0,
+          retryable: dataForSEOError.retryable,
+          response_time_ms: responseTime
         }
-      });
+      );
     }
   },
 
   async getSuggestions(req: KeywordsRequest, res: Response) {
+    const processedRes = res as ProcessedResponse;
     const startTime = Date.now();
     
     try {
       const { keywords, location_code, language_code } = req.body;
 
-      // Input validation
-      if (!Array.isArray(keywords) || keywords.length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'Keywords must be a non-empty array',
-          code: 'INVALID_KEYWORDS'
-        });
-      }
-
-      if (keywords.length > 10) {
-        return res.status(400).json({
-          success: false,
-          error: 'Maximum 10 seed keywords allowed per request',
-          code: 'TOO_MANY_KEYWORDS'
-        });
-      }
+      // Input validation is now handled by middleware
 
       logInfo('Keyword suggestions request', {
         keyword_count: keywords.length,
@@ -154,27 +108,21 @@ export const keywordsController = {
 
       const suggestions = response.tasks?.[0]?.result || [];
 
-      res.json({
-        success: true,
-        data: {
-          seed_keywords: keywords,
-          total_suggestions: suggestions.length,
-          location_code: location_code || 2840,
-          language_code: language_code || 'en',
-          suggestions: suggestions.map(item => ({
-            keyword: item.keyword,
-            search_volume: item.search_volume || 0,
-            competition: item.competition || 0,
-            cpc: item.cpc || 0,
-            monthly_searches: item.monthly_searches || []
-          })),
-          cost: response.cost || 0
-        },
-        meta: {
-          response_time_ms: responseTime,
-          timestamp: new Date().toISOString(),
-          api_version: 'v1'
-        }
+      processedRes.apiSuccess({
+        seed_keywords: keywords,
+        total_suggestions: suggestions.length,
+        location_code: location_code || 2840,
+        language_code: language_code || 'en',
+        suggestions: suggestions.map((item: any) => ({
+          keyword: item.keyword,
+          search_volume: item.search_volume || 0,
+          competition: item.competition || 0,
+          cpc: item.cpc || 0,
+          monthly_searches: item.monthly_searches || []
+        })),
+        cost: response.cost || 0
+      }, {
+        response_time_ms: responseTime
       });
 
     } catch (error) {
@@ -186,42 +134,26 @@ export const keywordsController = {
         responseTime
       });
 
-      res.status(dataForSEOError.statusCode || 500).json({
-        success: false,
-        error: dataForSEOError.message,
-        code: 'SUGGESTIONS_ERROR',
-        cost: dataForSEOError.cost || 0,
-        retryable: dataForSEOError.retryable,
-        meta: {
-          response_time_ms: responseTime,
-          timestamp: new Date().toISOString()
+      processedRes.status(dataForSEOError.statusCode || 500).apiError(
+        dataForSEOError.message,
+        'SUGGESTIONS_ERROR',
+        {
+          cost: dataForSEOError.cost || 0,
+          retryable: dataForSEOError.retryable,
+          response_time_ms: responseTime
         }
-      });
+      );
     }
   },
 
   async batchAnalysis(req: KeywordsRequest, res: Response) {
+    const processedRes = res as ProcessedResponse;
     const startTime = Date.now();
     
     try {
       const { keywords, location_code, language_code } = req.body;
 
-      // Input validation
-      if (!Array.isArray(keywords) || keywords.length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'Keywords must be a non-empty array',
-          code: 'INVALID_KEYWORDS'
-        });
-      }
-
-      if (keywords.length > 5) {
-        return res.status(400).json({
-          success: false,
-          error: 'Maximum 5 keywords allowed for batch analysis',
-          code: 'TOO_MANY_KEYWORDS'
-        });
-      }
+      // Input validation is now handled by middleware
 
       logInfo('Batch keyword analysis request', {
         keyword_count: keywords.length,
@@ -244,34 +176,28 @@ export const keywordsController = {
         if (result.data?.cost) totalCost += result.data.cost;
       });
 
-      res.json({
-        success: true,
-        data: {
-          keywords: keywords,
-          keyword_data: {
-            available: !!analysisResult.keywordData,
-            results: analysisResult.keywordData?.tasks?.[0]?.result || [],
-            cost: analysisResult.keywordData?.cost || 0
-          },
-          serp_data: {
-            total_searches: analysisResult.serpResults.length,
-            successful_searches: analysisResult.serpResults.filter(r => r.data && !r.error).length,
-            results: analysisResult.serpResults.map(result => ({
-              keyword: result.keyword,
-              success: !result.error,
-              data: result.data?.tasks?.[0]?.result || [],
-              total_results: result.data?.tasks?.[0]?.result?.length || 0,
-              cost: result.data?.cost || 0,
-              error: result.error || null
-            }))
-          },
-          total_cost: totalCost
+      processedRes.apiSuccess({
+        keywords: keywords,
+        keyword_data: {
+          available: !!analysisResult.keywordData,
+          results: analysisResult.keywordData?.tasks?.[0]?.result || [],
+          cost: analysisResult.keywordData?.cost || 0
         },
-        meta: {
-          response_time_ms: responseTime,
-          timestamp: new Date().toISOString(),
-          api_version: 'v1'
-        }
+        serp_data: {
+          total_searches: analysisResult.serpResults.length,
+          successful_searches: analysisResult.serpResults.filter(r => r.data && !r.error).length,
+          results: analysisResult.serpResults.map(result => ({
+            keyword: result.keyword,
+            success: !result.error,
+            data: result.data?.tasks?.[0]?.result || [],
+            total_results: result.data?.tasks?.[0]?.result?.length || 0,
+            cost: result.data?.cost || 0,
+            error: result.error || null
+          }))
+        },
+        total_cost: totalCost
+      }, {
+        response_time_ms: responseTime
       });
 
     } catch (error) {
@@ -283,16 +209,14 @@ export const keywordsController = {
         responseTime
       });
 
-      res.status(dataForSEOError.statusCode || 500).json({
-        success: false,
-        error: dataForSEOError.message,
-        code: 'BATCH_ANALYSIS_ERROR',
-        cost: dataForSEOError.cost || 0,
-        meta: {
-          response_time_ms: responseTime,
-          timestamp: new Date().toISOString()
+      processedRes.status(dataForSEOError.statusCode || 500).apiError(
+        dataForSEOError.message,
+        'BATCH_ANALYSIS_ERROR',
+        {
+          cost: dataForSEOError.cost || 0,
+          response_time_ms: responseTime
         }
-      });
+      );
     }
   }
 };

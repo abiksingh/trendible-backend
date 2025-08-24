@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { searchGoogleOrganic } from '../services/dataForSEOFunctional';
 import { handleApiError } from '../utils/dataForSEOErrorHandlers';
 import { logInfo, logError } from '../utils/dataForSEOLogger';
+import { ProcessedResponse } from '../middleware/responseFormatter';
 
 interface SerpRequest extends Request {
   body: {
@@ -15,27 +16,13 @@ interface SerpRequest extends Request {
 
 export const serpController = {
   async searchOrganic(req: SerpRequest, res: Response) {
+    const processedRes = res as ProcessedResponse;
     const startTime = Date.now();
     
     try {
       const { keyword, location_code, language_code, device, location_name } = req.body;
 
-      // Input validation
-      if (!keyword || typeof keyword !== 'string' || keyword.trim().length === 0) {
-        return res.status(400).json({
-          success: false,
-          error: 'Keyword is required and must be a non-empty string',
-          code: 'INVALID_KEYWORD'
-        });
-      }
-
-      if (keyword.length > 200) {
-        return res.status(400).json({
-          success: false,
-          error: 'Keyword must be less than 200 characters',
-          code: 'KEYWORD_TOO_LONG'
-        });
-      }
+      // Input validation is now handled by middleware, so we can skip manual validation
 
       logInfo('SERP organic search request', { 
         keyword: keyword.substring(0, 50),
@@ -55,7 +42,7 @@ export const serpController = {
       const response = await searchGoogleOrganic(searchParams);
       const responseTime = Date.now() - startTime;
 
-      res.json({
+      processedRes.json({
         success: true,
         data: {
           keyword: keyword.trim(),
@@ -99,6 +86,7 @@ export const serpController = {
   },
 
   async batchSearch(req: Request, res: Response) {
+    const processedRes = res as ProcessedResponse;
     const startTime = Date.now();
     
     try {
@@ -160,7 +148,7 @@ export const serpController = {
         return sum + (result.cost || 0);
       }, 0);
 
-      res.json({
+      processedRes.json({
         success: true,
         data: {
           successful_searches: successfulResults.length,
