@@ -105,10 +105,16 @@ export const getKeywordSuggestions = async (params: SimpleKeywordRequest) => {
   const client = createHttpClient();
   
   return withRetry(async () => {
+    // DataForSEO Labs keyword suggestions expects single keyword, not array
+    // If multiple keywords provided, use first one
+    const keyword = Array.isArray(params.keywords) ? params.keywords[0] : params.keywords[0];
+    
     const data = [{
-      keywords: params.keywords,
+      keyword: keyword,
       location_code: params.location_code || 2840,
-      language_code: params.language_code || 'en'
+      language_code: params.language_code || 'en',
+      limit: 100,
+      include_seed_keyword: true
     }];
 
     return await client.post(dataForSEOConfig.endpoints.KEYWORDS_SUGGESTIONS, data);
