@@ -66,6 +66,37 @@ const createHttpClient = () => {
       }
 
       return result;
+    },
+    
+    async postRaw(endpoint: string, dataArray: any[]) {
+      const url = `${baseURL}${endpoint}`;
+      const startTime = Date.now();
+      
+      logApiCall(`POST ${endpoint}`, { 
+        endpoint,
+        requestData: dataArray
+      }, startTime);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(dataArray)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.cost) {
+        logApiCost(endpoint, result.cost);
+      }
+
+      return result;
     }
   };
 };
@@ -109,15 +140,16 @@ export const getKeywordSuggestions = async (params: SimpleKeywordRequest) => {
     // If multiple keywords provided, use first one
     const keyword = Array.isArray(params.keywords) ? params.keywords[0] : params.keywords[0];
     
-    const data = [{
+    const requestData = [{
       keyword: keyword,
       location_code: params.location_code || 2840,
       language_code: params.language_code || 'en',
       limit: 100,
-      include_seed_keyword: true
+      include_seed_keyword: true,
+      include_serp_info: true
     }];
 
-    return await client.post(dataForSEOConfig.endpoints.KEYWORDS_SUGGESTIONS, data);
+    return await client.postRaw(dataForSEOConfig.endpoints.KEYWORDS_SUGGESTIONS, requestData);
   }, 'getKeywordSuggestions');
 };
 

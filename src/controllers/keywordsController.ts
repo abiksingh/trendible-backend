@@ -108,20 +108,44 @@ export const keywordsController = {
       const response = await getKeywordSuggestions(suggestionParams);
       const responseTime = Date.now() - startTime;
 
-      const suggestions = DataForSEOExtractors.keywordResults(response);
+      // Keyword suggestions have a different structure than regular keyword data
+      const results = DataForSEOExtractors.keywordResults(response);
       const responseSummary = DataForSEOResponseHandler.getResponseSummary(response);
+
+      // Extract suggestions from the nested structure
+      let suggestions: any[] = [];
+      let seedKeywordData: any = null;
+
+      if (results && results.length > 0) {
+        const firstResult = results[0];
+        // Get seed keyword data
+        seedKeywordData = firstResult.seed_keyword_data;
+        // Get suggestion items
+        suggestions = firstResult.items || [];
+      }
 
       processedRes.apiSuccess({
         seed_keywords: keywords,
+        seed_keyword_data: seedKeywordData ? {
+          keyword: seedKeywordData.keyword,
+          search_volume: seedKeywordData.keyword_info?.search_volume || 0,
+          competition: seedKeywordData.keyword_info?.competition || 0,
+          competition_level: seedKeywordData.keyword_info?.competition_level,
+          cpc: seedKeywordData.keyword_info?.cpc || 0,
+          monthly_searches: seedKeywordData.keyword_info?.monthly_searches || []
+        } : null,
         total_suggestions: suggestions.length,
         location_code: location_code || 2840,
         language_code: language_code || 'en',
         suggestions: suggestions.map((item: any) => ({
           keyword: item.keyword,
-          search_volume: item.search_volume || 0,
-          competition: item.competition || 0,
-          cpc: item.cpc || 0,
-          monthly_searches: item.monthly_searches || []
+          search_volume: item.keyword_info?.search_volume || 0,
+          competition: item.keyword_info?.competition || 0,
+          competition_level: item.keyword_info?.competition_level,
+          cpc: item.keyword_info?.cpc || 0,
+          monthly_searches: item.keyword_info?.monthly_searches || [],
+          keyword_difficulty: item.keyword_properties?.keyword_difficulty,
+          detected_language: item.keyword_properties?.detected_language
         })),
         cost: responseSummary.totalCost
       }, {
