@@ -6,6 +6,7 @@ interface DataForSEOEndpoints {
   readonly SERP_YOUTUBE_VIDEO: string;
   readonly KEYWORDS_GOOGLE_ADS: string;
   readonly KEYWORDS_SUGGESTIONS: string;
+  readonly KEYWORDS_DIFFICULTY: string;
   readonly AMAZON_PRODUCTS: string;
   readonly AMAZON_SEARCH_VOLUME: string;
   readonly SOCIAL_MEDIA_LIVE: string;
@@ -56,6 +57,7 @@ class DataForSEOConfiguration {
     SERP_YOUTUBE_VIDEO: '/v3/serp/youtube/organic/live/advanced',
     KEYWORDS_GOOGLE_ADS: '/v3/keywords_data/google_ads/keywords_for_keywords/live',
     KEYWORDS_SUGGESTIONS: '/v3/dataforseo_labs/google/keyword_suggestions/live',
+    KEYWORDS_DIFFICULTY: '/v3/dataforseo_labs/google/bulk_keyword_difficulty/live',
     AMAZON_PRODUCTS: '/v3/merchant/amazon/products/live/advanced',
     AMAZON_SEARCH_VOLUME: '/v3/dataforseo_labs/amazon/bulk_search_volume/live',
     SOCIAL_MEDIA_LIVE: '/v3/business_data/social_media/live',

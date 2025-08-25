@@ -132,6 +132,22 @@ export const getKeywordData = async (params: SimpleKeywordRequest) => {
   }, 'getKeywordData');
 };
 
+// Extended historical keyword data using Google Ads endpoint
+export const getKeywordDataExtended = async (params: SimpleKeywordRequest & { date_from?: string; date_to?: string }) => {
+  const client = createHttpClient();
+  
+  return withRetry(async () => {
+    const data = {
+      keywords: params.keywords,
+      location_code: params.location_code || 2840,
+      language_code: params.language_code || 'en',
+      ...(params.date_from && { date_from: params.date_from }),
+      ...(params.date_to && { date_to: params.date_to })
+    };
+    return await client.post('/v3/keywords_data/google_ads/search_volume/live', data);
+  }, 'getKeywordDataExtended');
+};
+
 export const getKeywordSuggestions = async (params: SimpleKeywordRequest) => {
   const client = createHttpClient();
   

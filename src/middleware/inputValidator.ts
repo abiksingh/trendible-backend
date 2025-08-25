@@ -293,14 +293,10 @@ export const seoValidationSchemas = {
       { field: 'location_code', type: 'number' as const, min: 1, max: 9999 },
       { field: 'language_code', type: 'string' as const, pattern: /^[a-z]{2}(-[A-Z]{2})?$/ },
       { 
-        field: 'sources', 
-        type: 'array' as const, 
-        max: 10,
-        customValidator: (value: string[]) => {
-          if (!Array.isArray(value)) return true;
-          const validSources = ['google', 'bing', 'youtube', 'all'];
-          return value.every(source => validSources.includes(source)) || 'Invalid source. Valid sources: google, bing, youtube, all';
-        }
+        field: 'source', 
+        type: 'string' as const, 
+        required: true,
+        values: ['google', 'bing', 'youtube']
       }
     ]
   },

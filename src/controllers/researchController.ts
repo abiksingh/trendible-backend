@@ -15,7 +15,7 @@ interface KeywordIntelligenceRequest extends Request {
     keyword: string;
     location_code?: number;
     language_code?: string;
-    sources?: string[]; // Optional filter for data sources
+    source: string; // Single data source (google, bing, or youtube)
   };
 }
 
@@ -25,13 +25,13 @@ export const researchController = {
     const startTime = Date.now();
     
     try {
-      const { keyword, location_code, language_code, sources } = req.body;
+      const { keyword, location_code, language_code, source } = req.body;
 
       logInfo('Keyword intelligence request', {
         keyword: keyword.substring(0, 50),
         location_code,
         language_code,
-        sources: sources || ['all']
+        source
       });
 
       // Get comprehensive keyword data from research service
@@ -39,7 +39,7 @@ export const researchController = {
         keyword: keyword.trim(),
         location_code,
         language_code,
-        sources
+        source
       });
 
       const responseTime = Date.now() - startTime;
@@ -50,13 +50,14 @@ export const researchController = {
           keyword: keyword.trim(),
           location_code: location_code || 2840,
           language_code: language_code || 'en',
+          source_requested: source,
           ...intelligenceData
         },
         meta: {
           response_time_ms: responseTime,
           timestamp: new Date().toISOString(),
           api_version: 'v1',
-          sources_queried: intelligenceData.sources_queried || ['google']
+          sources_queried: intelligenceData.sources_queried
         }
       });
 

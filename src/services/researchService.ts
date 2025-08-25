@@ -1,14 +1,14 @@
 import { getKeywordData, searchGoogleOrganic } from './dataForSEOFunctional';
+import { getKeywordDataExtended } from './dataForSEOSimple';
 import { DataForSEOExtractors, DataForSEOResponseHandler } from '../utils/dataForSEOResponseHandler';
 import { logInfo, logError, logWarn } from '../utils/dataForSEOLogger';
 import { dataForSEOConfig } from '../config/dataForSEOConfig';
-import { withRetry, handleApiError } from '../utils/dataForSEOErrorHandlers';
 
 export interface KeywordIntelligenceParams {
   keyword: string;
   location_code?: number;
   language_code?: string;
-  sources?: string[];
+  source: string;
 }
 
 export interface KeywordIntelligenceResult {
@@ -39,13 +39,13 @@ export interface KeywordSummary {
 }
 
 export const getKeywordIntelligence = async (params: KeywordIntelligenceParams): Promise<KeywordIntelligenceResult> => {
-  const { keyword, location_code = 2840, language_code = 'en', sources = ['google'] } = params;
+  const { keyword, location_code = 2840, language_code = 'en', source } = params;
   
   logInfo('Starting keyword intelligence research', {
     keyword,
     location_code,
     language_code,
-    sources
+    source
   });
 
   let totalCost = 0;
@@ -53,40 +53,50 @@ export const getKeywordIntelligence = async (params: KeywordIntelligenceParams):
   const searchEngines: any = {};
 
   try {
-    // Google Search Engine Data (if requested)
-    if (sources.includes('google') || sources.includes('all')) {
-      try {
-        const googleData = await getGoogleKeywordData(keyword, location_code, language_code);
-        searchEngines.google = googleData.data;
-        totalCost += googleData.cost;
-        sourcesQueried.push('google');
-      } catch (error) {
-        logWarn('Google data unavailable for keyword intelligence', { error });
-      }
+    // Google Search Engine Data
+    if (source === 'google') {
+      const [googleData, googleDifficultyData] = await Promise.all([
+        getGoogleKeywordData(keyword, location_code, language_code),
+        getKeywordDifficulty(keyword, location_code, language_code)
+      ]);
+      
+      // Enhance Google data with real difficulty and advanced trends
+      searchEngines.google = {
+        ...googleData.data,
+        difficulty_score: googleDifficultyData.data.difficulty_score,
+        complexity: googleDifficultyData.data.complexity,
+        advanced_trends: calculateAdvancedTrend(googleData.data.monthly_searches || [])
+      };
+      
+      totalCost += googleData.cost + googleDifficultyData.cost;
+      sourcesQueried.push('google');
     }
 
-    // Bing Search Engine Data (if requested)
-    if (sources.includes('bing') || sources.includes('all')) {
-      try {
-        const bingData = await getBingKeywordData(keyword, location_code, language_code);
-        searchEngines.bing = bingData.data;
-        totalCost += bingData.cost;
-        sourcesQueried.push('bing');
-      } catch (error) {
-        logWarn('Bing data unavailable for keyword intelligence', { error });
-      }
+    // Bing Search Engine Data
+    else if (source === 'bing') {
+      const [bingData, bingDifficultyData] = await Promise.all([
+        getBingKeywordData(keyword, location_code, language_code),
+        getBingKeywordDifficulty(keyword, location_code, language_code)
+      ]);
+      
+      // Enhance Bing data with real difficulty and advanced trends
+      searchEngines.bing = {
+        ...bingData.data,
+        difficulty_score: bingDifficultyData.data.difficulty_score,
+        complexity: bingDifficultyData.data.complexity,
+        advanced_trends: calculateAdvancedTrend((bingData.data as any).monthly_searches || [])
+      };
+      
+      totalCost += bingData.cost + bingDifficultyData.cost;
+      sourcesQueried.push('bing');
     }
 
-    // YouTube Data (if requested)
-    if (sources.includes('youtube') || sources.includes('all')) {
-      try {
-        const youtubeData = await getYouTubeKeywordData(keyword, location_code, language_code);
-        searchEngines.youtube = youtubeData.data;
-        totalCost += youtubeData.cost;
-        sourcesQueried.push('youtube');
-      } catch (error) {
-        logWarn('YouTube data unavailable for keyword intelligence', { error });
-      }
+    // YouTube Data
+    else if (source === 'youtube') {
+      const youtubeData = await getYouTubeKeywordData(keyword, location_code, language_code);
+      searchEngines.youtube = youtubeData.data;
+      totalCost += youtubeData.cost;
+      sourcesQueried.push('youtube');
     }
 
     // Generate summary insights
@@ -105,16 +115,38 @@ export const getKeywordIntelligence = async (params: KeywordIntelligenceParams):
   }
 };
 
-export const getGoogleKeywordData = async (keyword: string, locationCode: number, languageCode: string) => {
+export const getGoogleKeywordData = async (keyword: string, locationCode: number, languageCode: string, extendedHistory = true) => {
   const startTime = Date.now();
   
   try {
-    // Get keyword metrics data
-    const keywordResponse = await getKeywordData({
+    // Get extended historical data (up to 4 years if available)
+    const requestParams: any = {
       keywords: [keyword],
       location_code: locationCode,
       language_code: languageCode
-    });
+    };
+
+    if (extendedHistory) {
+      // Set date range for extended historical data
+      const currentDate = new Date();
+      const fourYearsAgo = new Date(currentDate);
+      fourYearsAgo.setFullYear(currentDate.getFullYear() - 4);
+      
+      // Format dates as YYYY-MM-DD
+      requestParams.date_from = fourYearsAgo.toISOString().split('T')[0];
+      requestParams.date_to = currentDate.toISOString().split('T')[0];
+      
+      logInfo('Extended historical keyword data request', {
+        keyword,
+        date_from: requestParams.date_from,
+        date_to: requestParams.date_to
+      });
+    }
+
+    // Get keyword metrics data - use extended endpoint if date range specified
+    const keywordResponse = extendedHistory && requestParams.date_from ? 
+      await getKeywordDataExtended(requestParams) : 
+      await getKeywordData(requestParams);
 
     const keywordResults = DataForSEOExtractors.keywordResults(keywordResponse);
     const keywordSummary = DataForSEOResponseHandler.getResponseSummary(keywordResponse);
@@ -131,7 +163,7 @@ export const getGoogleKeywordData = async (keyword: string, locationCode: number
       });
 
       const serpResults = DataForSEOExtractors.serpResults(serpResponse);
-      
+
       // Analyze SERP features
       serpFeatures = analyzeSerpFeatures(serpResults);
       intent = determineSearchIntent(serpResults, keyword);
@@ -142,15 +174,22 @@ export const getGoogleKeywordData = async (keyword: string, locationCode: number
 
     // Process keyword data
     const keywordData = keywordResults[0] || {};
+    const competition = keywordData.competition || 0;
+    
+    // Calculate competition level from competition score
+    let competitionLevel = 'low';
+    if (competition > 0.7) competitionLevel = 'high';
+    else if (competition > 0.4) competitionLevel = 'medium';
     
     return {
       data: {
         search_volume: keywordData.search_volume || 0,
-        competition: keywordData.competition || 0,
+        competition: competition,
         cpc: keywordData.cpc || 0,
-        competition_level: keywordData.competition_level || 'unknown',
+        competition_level: competitionLevel,
         monthly_searches: keywordData.monthly_searches || [],
         serp_features: serpFeatures,
+        serp_analysis: analyzeSerpStrategy(serpFeatures),
         intent: intent,
         trend: calculateTrend(keywordData.monthly_searches || [])
       },
@@ -168,6 +207,7 @@ export const analyzeSerpFeatures = (serpResults: any[]): string[] => {
   const features: string[] = [];
   
   for (const result of serpResults) {
+    // Direct SERP feature types from DataForSEO advanced endpoint
     if (result.type === 'people_also_ask') features.push('people_also_ask');
     if (result.type === 'knowledge_graph') features.push('knowledge_graph');
     if (result.type === 'featured_snippet') features.push('featured_snippet');
@@ -175,9 +215,116 @@ export const analyzeSerpFeatures = (serpResults: any[]): string[] => {
     if (result.type === 'shopping') features.push('shopping');
     if (result.type === 'images') features.push('images');
     if (result.type === 'videos') features.push('videos');
+    if (result.type === 'top_stories') features.push('news');
+    if (result.type === 'related_searches') features.push('related_searches');
+    if (result.type === 'ai_overview') features.push('ai_overview');
+    if (result.type === 'answer_box') features.push('answer_box');
+    if (result.type === 'jobs') features.push('jobs');
+    if (result.type === 'local_services') features.push('local_services');
+    if (result.type === 'reviews') features.push('reviews');
   }
 
   return [...new Set(features)]; // Remove duplicates
+};
+
+// Analyze SERP features for strategic insights
+export const analyzeSerpStrategy = (serpFeatures: string[]): any => {
+  const featureCount = serpFeatures.length;
+  const contentOpportunities: string[] = [];
+  const competitionIndicators: string[] = [];
+  
+  // Analyze each feature for opportunities
+  serpFeatures.forEach(feature => {
+    switch (feature) {
+      case 'people_also_ask':
+        contentOpportunities.push('Create comprehensive FAQ content');
+        contentOpportunities.push('Target question-based keywords');
+        break;
+      case 'featured_snippet':
+        contentOpportunities.push('Optimize for featured snippets with structured content');
+        contentOpportunities.push('Use clear headings and concise answers');
+        break;
+      case 'images':
+        contentOpportunities.push('Include high-quality visual content');
+        contentOpportunities.push('Optimize image alt text and file names');
+        break;
+      case 'videos':
+        contentOpportunities.push('Create video content strategy');
+        contentOpportunities.push('Optimize for YouTube SEO');
+        break;
+      case 'news':
+        contentOpportunities.push('Focus on timely, newsworthy content');
+        contentOpportunities.push('Establish content publishing frequency');
+        break;
+      case 'local_pack':
+        contentOpportunities.push('Optimize for local SEO');
+        contentOpportunities.push('Focus on location-based keywords');
+        break;
+      case 'shopping':
+        contentOpportunities.push('Include product-focused content');
+        contentOpportunities.push('Add e-commerce optimization');
+        break;
+      case 'knowledge_graph':
+        contentOpportunities.push('Build entity authority and brand recognition');
+        contentOpportunities.push('Focus on structured data markup');
+        break;
+      case 'related_searches':
+        contentOpportunities.push('Research semantic and related keywords');
+        contentOpportunities.push('Create topic clusters around main keyword');
+        break;
+      case 'ai_overview':
+        contentOpportunities.push('Create authoritative, comprehensive content');
+        contentOpportunities.push('Focus on E-A-T (Expertise, Authority, Trust)');
+        break;
+    }
+  });
+
+  // Competition analysis
+  if (featureCount >= 5) {
+    competitionIndicators.push('Very high SERP competition');
+    competitionIndicators.push('Multiple features competing for clicks');
+  } else if (featureCount >= 3) {
+    competitionIndicators.push('Moderate SERP competition');
+    competitionIndicators.push('Several features present');
+  } else if (featureCount >= 1) {
+    competitionIndicators.push('Some SERP competition');
+    competitionIndicators.push('Limited features competing');
+  } else {
+    competitionIndicators.push('Clean organic SERP');
+    competitionIndicators.push('Traditional search results');
+  }
+
+  // CTR impact estimation
+  let ctrImpact = 0;
+  serpFeatures.forEach(feature => {
+    switch (feature) {
+      case 'featured_snippet': ctrImpact -= 8; break;
+      case 'people_also_ask': ctrImpact -= 5; break;
+      case 'images': ctrImpact -= 4; break;
+      case 'videos': ctrImpact -= 6; break;
+      case 'shopping': ctrImpact -= 7; break;
+      case 'local_pack': ctrImpact -= 10; break;
+      case 'knowledge_graph': ctrImpact -= 3; break;
+      case 'news': ctrImpact -= 5; break;
+      case 'ai_overview': ctrImpact -= 12; break;
+      default: ctrImpact -= 2; break;
+    }
+  });
+
+  // Organic difficulty modifier
+  let organicDifficulty = 'low';
+  if (featureCount >= 4) organicDifficulty = 'very_high';
+  else if (featureCount >= 3) organicDifficulty = 'high';  
+  else if (featureCount >= 2) organicDifficulty = 'medium';
+
+  return {
+    feature_count: featureCount,
+    organic_competition: organicDifficulty,
+    estimated_ctr_impact: Math.max(ctrImpact, -50), // Cap at -50%
+    content_opportunities: [...new Set(contentOpportunities)], // Remove duplicates
+    competition_indicators: [...new Set(competitionIndicators)],
+    strategic_priority: featureCount >= 3 ? 'high_competition_strategy' : 'standard_seo_approach'
+  };
 };
 
 export const determineSearchIntent = (serpResults: any[], keyword: string): string => {
@@ -232,6 +379,313 @@ export const calculateTrend = (monthlySearches: any[]): string => {
   return 'stable';
 };
 
+
+// Advanced trend analysis with quarterly and yearly patterns
+export const calculateAdvancedTrend = (monthlySearches: any[]): any => {
+  if (!monthlySearches || monthlySearches.length < 3) {
+    return {
+      monthly_trend: 'insufficient_data',
+      quarterly_trend: 'insufficient_data',
+      yearly_trend: 'insufficient_data',
+      seasonality: 'unknown',
+      volatility: 'unknown'
+    };
+  }
+
+  const volumes = monthlySearches.map(m => m.search_volume || 0);
+  const totalMonths = volumes.length;
+  
+  // Monthly trend (basic 3-month comparison)
+  const monthlyTrend = calculateTrend(monthlySearches);
+  
+  // Quarterly trend (last 3 months vs previous 3 months)
+  let quarterlyTrend = 'insufficient_data';
+  if (totalMonths >= 6) {
+    const lastQuarter = volumes.slice(-3);
+    const prevQuarter = volumes.slice(-6, -3);
+    const lastQuarterAvg = lastQuarter.reduce((a, b) => a + b, 0) / 3;
+    const prevQuarterAvg = prevQuarter.reduce((a, b) => a + b, 0) / 3;
+    
+    if (prevQuarterAvg > 0) {
+      const quarterlyChange = ((lastQuarterAvg - prevQuarterAvg) / prevQuarterAvg) * 100;
+      quarterlyTrend = quarterlyChange > 15 ? `+${Math.round(quarterlyChange)}%` : 
+                     quarterlyChange < -15 ? `${Math.round(quarterlyChange)}%` : 'stable';
+    }
+  }
+
+  // Yearly trend - enhanced for extended historical data
+  let yearlyTrend = 'insufficient_data';
+  let yearOverYearGrowth = null;
+  
+  if (totalMonths >= 24) {
+    // Compare last 12 months with same period previous year
+    const currentYear = volumes.slice(-12);
+    const previousYear = volumes.slice(-24, -12);
+    
+    const currentYearTotal = currentYear.reduce((a, b) => a + b, 0);
+    const previousYearTotal = previousYear.reduce((a, b) => a + b, 0);
+    
+    if (previousYearTotal > 0) {
+      yearOverYearGrowth = ((currentYearTotal - previousYearTotal) / previousYearTotal) * 100;
+      yearlyTrend = yearOverYearGrowth > 20 ? `+${Math.round(yearOverYearGrowth)}%` : 
+                   yearOverYearGrowth < -20 ? `${Math.round(yearOverYearGrowth)}%` : 'stable';
+    }
+  } else if (totalMonths >= 12) {
+    // For 12+ months, compare first and last 6 months
+    const firstHalf = volumes.slice(0, 6);
+    const lastHalf = volumes.slice(-6);
+    
+    const firstHalfAvg = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
+    const lastHalfAvg = lastHalf.reduce((a, b) => a + b, 0) / lastHalf.length;
+    
+    if (firstHalfAvg > 0) {
+      const halfYearChange = ((lastHalfAvg - firstHalfAvg) / firstHalfAvg) * 100;
+      yearlyTrend = halfYearChange > 25 ? `+${Math.round(halfYearChange)}%` : 
+                   halfYearChange < -25 ? `${Math.round(halfYearChange)}%` : 'stable';
+    }
+  }
+
+  // Enhanced seasonality detection
+  const maxVolume = Math.max(...volumes);
+  const minVolume = Math.min(...volumes);
+  let seasonality = 'low';
+  
+  if (maxVolume > 0) {
+    const variationPercent = ((maxVolume - minVolume) / maxVolume) * 100;
+    if (variationPercent > 60) seasonality = 'very_high';
+    else if (variationPercent > 40) seasonality = 'high';
+    else if (variationPercent > 25) seasonality = 'medium';
+  }
+
+  // Volatility calculation
+  const mean = volumes.reduce((a, b) => a + b, 0) / volumes.length;
+  const variance = volumes.reduce((sum, vol) => sum + Math.pow(vol - mean, 2), 0) / volumes.length;
+  const volatility = mean > 0 ? Math.sqrt(variance) / mean : 0;
+
+  return {
+    monthly_trend: monthlyTrend,
+    quarterly_trend: quarterlyTrend,
+    yearly_trend: yearlyTrend,
+    year_over_year_growth: yearOverYearGrowth,
+    seasonality,
+    volatility: volatility > 0.4 ? 'very_high' : volatility > 0.3 ? 'high' : volatility > 0.15 ? 'medium' : 'low',
+    peak_month: monthlySearches[volumes.indexOf(maxVolume)]?.month || null,
+    low_month: monthlySearches[volumes.indexOf(minVolume)]?.month || null,
+    historical_months: totalMonths,
+    avg_monthly_volume: Math.round(mean)
+  };
+};
+
+// Get Bing keyword difficulty score (real DataForSEO data)
+export const getBingKeywordDifficulty = async (keyword: string, locationCode: number, languageCode: string) => {
+  const startTime = Date.now();
+  
+  try {
+    const data = [{
+      keywords: [keyword],
+      location_code: locationCode,
+      language_code: languageCode
+    }];
+
+    const baseURL = dataForSEOConfig.baseUrl;
+    const auth = btoa(`${dataForSEOConfig.credentials.username}:${dataForSEOConfig.credentials.password}`);
+    
+    const response = await fetch(`${baseURL}/v3/dataforseo_labs/bing/bulk_keyword_difficulty/live`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Bing keyword difficulty API failed: ${response.status} ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    const processingTime = Date.now() - startTime;
+    
+    if (result.status_code !== 20000) {
+      logError('Bing keyword difficulty API failed', {
+        status_code: result.status_code,
+        status_message: result.status_message,
+        keyword
+      });
+      throw new Error(`Bing keyword difficulty API error: ${result.status_message}`);
+    }
+
+    const difficultyItems = result.tasks?.[0]?.result?.[0]?.items || [];
+    const cost = result.tasks?.[0]?.cost || 0;
+
+    // Debug logging
+    logInfo('Bing keyword difficulty API response', {
+      keyword,
+      items_count: difficultyItems.length,
+      first_item_difficulty: difficultyItems[0]?.keyword_difficulty
+    });
+
+    // Find the keyword result
+    const keywordResult = difficultyItems.find((item: any) => item.keyword === keyword);
+
+    if (!keywordResult) {
+      return {
+        data: {
+          keyword,
+          difficulty_score: null,
+          complexity: 'unknown',
+          competition_level: 'unknown'
+        },
+        cost,
+        processing_time: processingTime
+      };
+    }
+
+    // Calculate complexity based on difficulty score
+    const difficultyScore = keywordResult.keyword_difficulty || 0;
+    let complexity = 'easy';
+    if (difficultyScore > 80) complexity = 'very_hard';
+    else if (difficultyScore > 60) complexity = 'hard';
+    else if (difficultyScore > 40) complexity = 'medium';
+    else if (difficultyScore > 20) complexity = 'moderate';
+
+    return {
+      data: {
+        keyword,
+        difficulty_score: difficultyScore,
+        complexity,
+        competition_level: difficultyScore > 70 ? 'high' : difficultyScore > 40 ? 'medium' : 'low'
+      },
+      cost,
+      processing_time: processingTime
+    };
+
+  } catch (error) {
+    const processingTime = Date.now() - startTime;
+    logError('Bing keyword difficulty request failed', {
+      keyword,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+    
+    return {
+      data: {
+        keyword,
+        difficulty_score: null,
+        complexity: 'unknown',
+        competition_level: 'unknown',
+        api_error: error instanceof Error ? error.message : 'Unknown error'
+      },
+      cost: 0,
+      processing_time: processingTime
+    };
+  }
+};
+
+// Get Google keyword difficulty score (real DataForSEO data)
+export const getKeywordDifficulty = async (keyword: string, locationCode: number, languageCode: string) => {
+  const startTime = Date.now();
+  
+  try {
+    const data = [{
+      keywords: [keyword],
+      location_code: locationCode,
+      language_code: languageCode
+    }];
+
+    const baseURL = dataForSEOConfig.baseUrl;
+    const auth = btoa(`${dataForSEOConfig.credentials.username}:${dataForSEOConfig.credentials.password}`);
+    
+    const response = await fetch(`${baseURL}/v3/dataforseo_labs/google/bulk_keyword_difficulty/live`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Google keyword difficulty API failed: ${response.status} ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    const processingTime = Date.now() - startTime;
+    
+    if (result.status_code !== 20000) {
+      logError('Google keyword difficulty API failed', {
+        status_code: result.status_code,
+        status_message: result.status_message,
+        keyword
+      });
+      throw new Error(`Google keyword difficulty API error: ${result.status_message}`);
+    }
+
+    const difficultyItems = result.tasks?.[0]?.result?.[0]?.items || [];
+    const cost = result.tasks?.[0]?.cost || 0;
+
+    // Debug logging
+    logInfo('Google keyword difficulty API response', {
+      keyword,
+      items_count: difficultyItems.length,
+      first_item_difficulty: difficultyItems[0]?.keyword_difficulty
+    });
+
+    // Find the keyword result
+    const keywordResult = difficultyItems.find((item: any) => item.keyword === keyword);
+
+    if (!keywordResult) {
+      return {
+        data: {
+          keyword,
+          difficulty_score: null,
+          complexity: 'unknown',
+          competition_level: 'unknown'
+        },
+        cost,
+        processing_time: processingTime
+      };
+    }
+
+    // Calculate complexity based on difficulty score
+    const difficultyScore = keywordResult.keyword_difficulty || 0;
+    let complexity = 'easy';
+    if (difficultyScore > 80) complexity = 'very_hard';
+    else if (difficultyScore > 60) complexity = 'hard';
+    else if (difficultyScore > 40) complexity = 'medium';
+    else if (difficultyScore > 20) complexity = 'moderate';
+
+    return {
+      data: {
+        keyword,
+        difficulty_score: difficultyScore,
+        complexity,
+        competition_level: difficultyScore > 70 ? 'high' : difficultyScore > 40 ? 'medium' : 'low'
+      },
+      cost,
+      processing_time: processingTime
+    };
+
+  } catch (error) {
+    const processingTime = Date.now() - startTime;
+    logError('Google keyword difficulty request failed', {
+      keyword,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+    
+    return {
+      data: {
+        keyword,
+        difficulty_score: null,
+        complexity: 'unknown',
+        competition_level: 'unknown',
+        api_error: error instanceof Error ? error.message : 'Unknown error'
+      },
+      cost: 0,
+      processing_time: processingTime
+    };
+  }
+};
+
 // Bing Search Engine Functions
 export const getBingKeywordData = async (keyword: string, locationCode: number, languageCode: string) => {
   const startTime = Date.now();
@@ -264,12 +718,15 @@ export const getBingKeywordData = async (keyword: string, locationCode: number, 
     const serpResults = DataForSEOExtractors.serpResults(result);
     const responseSummary = DataForSEOResponseHandler.getResponseSummary(result);
 
+    const serpFeatures = analyzeSerpFeatures(serpResults);
+    
     return {
       data: {
         search_volume: 0, // Bing doesn't provide direct volume in SERP
         results: serpResults,
         total_results: serpResults.length,
-        serp_features: analyzeSerpFeatures(serpResults),
+        serp_features: serpFeatures,
+        serp_analysis: analyzeSerpStrategy(serpFeatures),
         intent: determineSearchIntent(serpResults, keyword),
         platform: 'bing'
       },

@@ -232,9 +232,14 @@ export type DataForSEOExtractorMethod =
 
 // Export common extraction patterns
 export const DataForSEOExtractors = {
-  // For SERP results (multiple items expected)
-  serpResults: (response: DataForSEOResponse) => 
-    DataForSEOResponseHandler.extractFirstTaskResults(response),
+  // For SERP results (multiple items expected) - Extract items from SERP results
+  serpResults: (response: DataForSEOResponse) => {
+    const results = DataForSEOResponseHandler.extractFirstTaskResults(response);
+    if (results.length > 0 && results[0].items) {
+      return results[0].items; // Return the actual SERP items (people_also_ask, organic, etc.)
+    }
+    return results;
+  },
   
   // For keyword data (multiple items expected)
   keywordResults: (response: DataForSEOResponse) => 
