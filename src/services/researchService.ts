@@ -1,4 +1,4 @@
-import { getKeywordData, searchGoogleOrganic } from './dataForSEOFunctional';
+import { getKeywordData, searchGoogleOrganic, searchGooglePaidAds } from './dataForSEOFunctional';
 import { getKeywordDataExtended } from './dataForSEOSimple';
 import { DataForSEOExtractors, DataForSEOResponseHandler } from '../utils/dataForSEOResponseHandler';
 import { logInfo, logError, logWarn } from '../utils/dataForSEOLogger';
@@ -154,6 +154,7 @@ export const getGoogleKeywordData = async (keyword: string, locationCode: number
     // Get SERP data for additional insights
     let serpFeatures: string[] = [];
     let intent = 'unknown';
+    let paidCompetitionAnalysis = null;
     
     try {
       const serpResponse = await searchGoogleOrganic({
@@ -168,8 +169,29 @@ export const getGoogleKeywordData = async (keyword: string, locationCode: number
       serpFeatures = analyzeSerpFeatures(serpResults);
       intent = determineSearchIntent(serpResults, keyword);
       
+      // Analyze paid competition from organic SERP results
+      paidCompetitionAnalysis = await analyzePaidCompetition(serpResults, 'google');
+      
     } catch (serpError) {
       logWarn('SERP data unavailable for keyword analysis', { error: serpError });
+    }
+
+    // Try dedicated Google Paid Ads endpoint for more comprehensive paid data
+    if (!paidCompetitionAnalysis?.paid_competition?.ads_count || paidCompetitionAnalysis.paid_competition.ads_count === 0) {
+      try {
+        logInfo('Attempting dedicated Google Paid Ads endpoint for comprehensive paid data');
+        const googlePaidResponse = await searchGooglePaidAds({
+          keyword,
+          location_code: locationCode,
+          language_code: languageCode
+        });
+
+        const paidSerpResults = DataForSEOExtractors.serpResults(googlePaidResponse);
+        paidCompetitionAnalysis = await analyzePaidCompetition(paidSerpResults, 'google');
+        
+      } catch (paidError) {
+        logWarn('Google Paid Ads endpoint unavailable', { error: paidError });
+      }
     }
 
     // Process keyword data
@@ -191,7 +213,13 @@ export const getGoogleKeywordData = async (keyword: string, locationCode: number
         serp_features: serpFeatures,
         serp_analysis: analyzeSerpStrategy(serpFeatures),
         intent: intent,
-        trend: calculateTrend(keywordData.monthly_searches || [])
+        trend: calculateTrend(keywordData.monthly_searches || []),
+        paid_competition: paidCompetitionAnalysis?.paid_competition || {
+          ads_count: 0,
+          competition_level: 'none',
+          advertiser_domains: [],
+          strategic_insights: ['No paid competition data available']
+        }
       },
       cost: keywordSummary.totalCost,
       response_time: Date.now() - startTime
@@ -720,6 +748,9 @@ export const getBingKeywordData = async (keyword: string, locationCode: number, 
 
     const serpFeatures = analyzeSerpFeatures(serpResults);
     
+    // Analyze paid competition for Bing
+    const paidCompetitionAnalysis = await analyzePaidCompetition(serpResults, 'bing');
+    
     return {
       data: {
         search_volume: 0, // Bing doesn't provide direct volume in SERP
@@ -728,7 +759,13 @@ export const getBingKeywordData = async (keyword: string, locationCode: number, 
         serp_features: serpFeatures,
         serp_analysis: analyzeSerpStrategy(serpFeatures),
         intent: determineSearchIntent(serpResults, keyword),
-        platform: 'bing'
+        platform: 'bing',
+        paid_competition: paidCompetitionAnalysis?.paid_competition || {
+          ads_count: 0,
+          competition_level: 'none',
+          advertiser_domains: [],
+          strategic_insights: ['No paid competition data available']
+        }
       },
       cost: responseSummary.totalCost,
       response_time: Date.now() - startTime
@@ -910,6 +947,246 @@ const generateComparisonInsights = (comparisons: any, keyword: string): any => {
   }
 
   return insights;
+};
+
+// Analyze paid competition from SERP results
+export const analyzePaidCompetition = async (serpResults: any[], platform: string = 'google'): Promise<any> => {
+  const startTime = Date.now();
+  
+  try {
+    const paidResults = serpResults.filter((result: any) => result.type === 'paid');
+    
+    if (paidResults.length === 0) {
+      return {
+        paid_competition: {
+          ads_count: 0,
+          competition_level: 'none',
+          advertiser_domains: [],
+          ad_positions: [],
+          strategic_insights: [
+            'No paid competition detected',
+            'Opportunity for paid advertising entry',
+            'Lower cost-per-click expected'
+          ]
+        },
+        processing_time: Date.now() - startTime
+      };
+    }
+
+    // Extract advertiser information
+    const advertiserDomains = [...new Set(paidResults.map((ad: any) => ad.domain).filter(Boolean))];
+    const adPositions = paidResults.map((ad: any) => ({
+      position: ad.rank_absolute || ad.rank_group || 0,
+      domain: ad.domain,
+      title: ad.title,
+      url: ad.url
+    }));
+
+    // Analyze ad quality and features
+    const adQualityScores = paidResults.map((ad: any) => calculateAdQuality(ad));
+    const avgAdQuality = adQualityScores.length > 0 ? 
+      adQualityScores.reduce((sum, score) => sum + score, 0) / adQualityScores.length : 0;
+
+    // Competition level analysis
+    let competitionLevel = 'low';
+    if (paidResults.length >= 8) competitionLevel = 'very_high';
+    else if (paidResults.length >= 5) competitionLevel = 'high';
+    else if (paidResults.length >= 3) competitionLevel = 'medium';
+
+    // Strategic insights generation
+    const strategicInsights = generatePaidCompetitionInsights(
+      paidResults.length,
+      advertiserDomains,
+      avgAdQuality,
+      platform
+    );
+
+    return {
+      paid_competition: {
+        ads_count: paidResults.length,
+        competition_level: competitionLevel,
+        advertiser_domains: advertiserDomains,
+        ad_positions: adPositions,
+        average_ad_quality: Math.round(avgAdQuality * 10) / 10,
+        top_advertisers: getTopAdvertisers(paidResults),
+        ad_features: analyzeAdFeatures(paidResults),
+        strategic_insights: strategicInsights,
+        platform: platform
+      },
+      processing_time: Date.now() - startTime
+    };
+
+  } catch (error) {
+    logError('Paid competition analysis failed', { error, platform });
+    return {
+      paid_competition: {
+        ads_count: 0,
+        competition_level: 'unknown',
+        advertiser_domains: [],
+        ad_positions: [],
+        strategic_insights: ['Analysis failed - manual review needed'],
+        error: error instanceof Error ? error.message : 'Unknown error'
+      },
+      processing_time: Date.now() - startTime
+    };
+  }
+};
+
+// Calculate ad quality score based on available features
+const calculateAdQuality = (ad: any): number => {
+  let qualityScore = 5.0; // Base score
+
+  // Title quality (length and clarity)
+  if (ad.title) {
+    const titleLength = ad.title.length;
+    if (titleLength >= 30 && titleLength <= 60) qualityScore += 1.0;
+    if (ad.title.includes('|') || ad.title.includes('-')) qualityScore += 0.5; // Brand separation
+  }
+
+  // Description quality
+  if (ad.description && ad.description.length >= 80) qualityScore += 1.0;
+
+  // Extensions and additional features
+  if (ad.ad_aclk) qualityScore += 0.5; // Has tracking link
+  if (ad.rating && ad.rating.value >= 4.0) qualityScore += 1.5; // Good rating
+  if (ad.price_range) qualityScore += 0.5; // Shows pricing
+  
+  // Sitelinks or additional features
+  if (ad.rectangle && ad.rectangle.items && ad.rectangle.items.length > 0) {
+    qualityScore += 1.0; // Rich snippets/sitelinks
+  }
+
+  // Brand indicators
+  if (ad.website_name) qualityScore += 0.5; // Clear brand name
+
+  return Math.min(qualityScore, 10.0); // Cap at 10
+};
+
+// Generate strategic insights for paid competition
+const generatePaidCompetitionInsights = (
+  adsCount: number, 
+  domains: string[], 
+  avgQuality: number,
+  platform: string
+): string[] => {
+  const insights: string[] = [];
+
+  // Competition level insights
+  if (adsCount >= 8) {
+    insights.push('Extremely competitive paid landscape');
+    insights.push('High CPC expected - consider long-tail targeting');
+    insights.push('Quality Score optimization critical for success');
+  } else if (adsCount >= 5) {
+    insights.push('Highly competitive paid market');
+    insights.push('Focus on ad quality and landing page optimization');
+  } else if (adsCount >= 3) {
+    insights.push('Moderate paid competition');
+    insights.push('Good opportunity with proper targeting');
+  } else if (adsCount > 0) {
+    insights.push('Limited paid competition');
+    insights.push('Opportunity for market entry with lower CPC');
+  }
+
+  // Domain diversity insights
+  const uniqueDomains = domains.length;
+  if (uniqueDomains === adsCount) {
+    insights.push('Diverse advertiser base - no single dominant player');
+  } else if (uniqueDomains < adsCount / 2) {
+    insights.push('Few advertisers running multiple ads - aggressive competition');
+  }
+
+  // Ad quality insights
+  if (avgQuality >= 8.0) {
+    insights.push('High-quality ads with rich features - premium competition');
+    insights.push('Invest in professional ad copy and extensions');
+  } else if (avgQuality >= 6.0) {
+    insights.push('Standard ad quality - opportunity for differentiation');
+  } else if (avgQuality < 5.0) {
+    insights.push('Room for improvement in ad quality - competitive advantage possible');
+  }
+
+  // Platform-specific insights
+  if (platform === 'bing') {
+    insights.push('Bing audience may have different intent - test messaging variations');
+    if (adsCount < 5) {
+      insights.push('Less competition on Bing - potential for better ROI');
+    }
+  } else if (platform === 'google') {
+    insights.push('Google Ads competition - focus on Quality Score factors');
+  }
+
+  return insights;
+};
+
+// Get top advertisers by position and frequency
+const getTopAdvertisers = (paidResults: any[]): any[] => {
+  const advertisers = new Map();
+
+  paidResults.forEach((ad: any) => {
+    if (ad.domain) {
+      if (!advertisers.has(ad.domain)) {
+        advertisers.set(ad.domain, {
+          domain: ad.domain,
+          ads_count: 0,
+          positions: [],
+          sample_title: ad.title || '',
+          website_name: ad.website_name || ''
+        });
+      }
+      
+      const advertiser = advertisers.get(ad.domain);
+      advertiser.ads_count += 1;
+      advertiser.positions.push(ad.rank_absolute || ad.rank_group || 0);
+    }
+  });
+
+  return Array.from(advertisers.values())
+    .sort((a, b) => b.ads_count - a.ads_count)
+    .slice(0, 5);
+};
+
+// Analyze ad features across all paid results
+const analyzeAdFeatures = (paidResults: any[]): any => {
+  const features = {
+    has_ratings: 0,
+    has_pricing: 0,
+    has_extensions: 0,
+    has_images: 0,
+    avg_title_length: 0,
+    avg_description_length: 0
+  };
+
+  let totalTitleLength = 0;
+  let totalDescLength = 0;
+  let titlesCount = 0;
+  let descriptionsCount = 0;
+
+  paidResults.forEach((ad: any) => {
+    if (ad.rating) features.has_ratings += 1;
+    if (ad.price_range || ad.price) features.has_pricing += 1;
+    if (ad.rectangle && ad.rectangle.items) features.has_extensions += 1;
+    if (ad.images && ad.images.length > 0) features.has_images += 1;
+
+    if (ad.title) {
+      totalTitleLength += ad.title.length;
+      titlesCount += 1;
+    }
+    if (ad.description) {
+      totalDescLength += ad.description.length;
+      descriptionsCount += 1;
+    }
+  });
+
+  features.avg_title_length = titlesCount > 0 ? Math.round(totalTitleLength / titlesCount) : 0;
+  features.avg_description_length = descriptionsCount > 0 ? Math.round(totalDescLength / descriptionsCount) : 0;
+
+  return {
+    ...features,
+    ratings_percentage: Math.round((features.has_ratings / paidResults.length) * 100),
+    pricing_percentage: Math.round((features.has_pricing / paidResults.length) * 100),
+    extensions_percentage: Math.round((features.has_extensions / paidResults.length) * 100),
+    images_percentage: Math.round((features.has_images / paidResults.length) * 100)
+  };
 };
 
 export const generateKeywordSummary = (searchEngines: any, keyword: string): KeywordSummary => {

@@ -223,6 +223,22 @@ export const getDomainTechnologies = async (params: SimpleDomainRequest) => {
   }, 'getDomainTechnologies');
 };
 
+// Google Paid Ads Operations
+export const searchGooglePaidAds = async (params: SimpleSearchRequest) => {
+  const client = createHttpClient();
+  
+  return withRetry(async () => {
+    const data = {
+      keyword: params.keyword,
+      location_code: params.location_code || 2840,
+      language_code: params.language_code || 'en',
+      device: params.device || 'desktop'
+    };
+
+    return await client.post('/v3/serp/google/ads_search/live/advanced', data);
+  }, 'searchGooglePaidAds');
+};
+
 // Batch Operations
 export const batchKeywordAnalysis = async (keywords: string[], options: { location_code?: number; language_code?: string } = {}) => {
   try {

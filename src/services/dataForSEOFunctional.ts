@@ -3,6 +3,7 @@ import { dataForSEOConfig } from '../config/dataForSEOConfig';
 
 import {
   searchGoogleOrganic,
+  searchGooglePaidAds,
   getKeywordData,
   getKeywordSuggestions,
   getBacklinksOverview,
@@ -69,6 +70,7 @@ export {
   
   // SERP operations
   searchGoogleOrganic,
+  searchGooglePaidAds,
   
   // Keywords operations
   getKeywordData,

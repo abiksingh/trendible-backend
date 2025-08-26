@@ -51,7 +51,7 @@ interface CacheConfig {
 class DataForSEOConfiguration {
   public readonly endpoints: DataForSEOEndpoints = {
     SERP_GOOGLE_ORGANIC: '/v3/serp/google/organic/live/advanced',
-    SERP_GOOGLE_PAID: '/v3/serp/google/paid/live/advanced',
+    SERP_GOOGLE_PAID: '/v3/serp/google/ads_search/live/advanced',
     SERP_BING_ORGANIC: '/v3/serp/bing/organic/live/advanced',
     SERP_YAHOO_ORGANIC: '/v3/serp/yahoo/organic/live/advanced',
     SERP_YOUTUBE_VIDEO: '/v3/serp/youtube/organic/live/advanced',
