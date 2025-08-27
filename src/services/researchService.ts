@@ -826,47 +826,6 @@ export const getYouTubeKeywordData = async (keyword: string, locationCode: numbe
   }
 };
 
-// Search Engine Comparison Function
-export const compareSearchEngines = async (keyword: string, locationCode: number, languageCode: string) => {
-  const startTime = Date.now();
-  const comparisons: any = {};
-  let totalCost = 0;
-
-  try {
-    // Get Google data
-    try {
-      const googleData = await getGoogleKeywordData(keyword, locationCode, languageCode);
-      comparisons.google = googleData.data;
-      totalCost += googleData.cost;
-    } catch (error) {
-      comparisons.google = { error: 'Data unavailable' };
-    }
-
-    // Get Bing data
-    try {
-      const bingData = await getBingKeywordData(keyword, locationCode, languageCode);
-      comparisons.bing = bingData.data;
-      totalCost += bingData.cost;
-    } catch (error) {
-      comparisons.bing = { error: 'Data unavailable' };
-    }
-
-    // Generate comparison insights
-    const insights = generateComparisonInsights(comparisons, keyword);
-
-    return {
-      keyword,
-      platforms: comparisons,
-      insights,
-      total_cost: totalCost,
-      response_time: Date.now() - startTime
-    };
-
-  } catch (error) {
-    logError('Search engine comparison failed', error);
-    throw error;
-  }
-};
 
 // Helper Functions
 const analyzeVideoEngagement = (videoResults: any[]): any => {

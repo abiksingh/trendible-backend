@@ -25,34 +25,6 @@ interface DataForSEOResponse {
 }
 
 export class DataForSEOResponseHandler {
-  
-  /**
-   * Safely extracts all results from DataForSEO response
-   * @param response - DataForSEO API response
-   * @returns Array of all results from all successful tasks
-   */
-  static extractAllResults(response: DataForSEOResponse): any[] {
-    if (!response?.tasks || !Array.isArray(response.tasks)) {
-      throw new Error('Invalid DataForSEO response: missing tasks array');
-    }
-
-    const allResults: any[] = [];
-    
-    for (const task of response.tasks) {
-      // Check if task was successful
-      if (task.status_code !== 20000) {
-        console.warn(`DataForSEO task failed: ${task.status_message} (code: ${task.status_code})`);
-        continue;
-      }
-
-      // Extract results from successful task
-      if (task.result && Array.isArray(task.result)) {
-        allResults.push(...task.result);
-      }
-    }
-
-    return allResults;
-  }
 
   /**
    * Safely extracts first task's results (for single requests)
@@ -73,56 +45,6 @@ export class DataForSEOResponseHandler {
     return firstTask.result || [];
   }
 
-  /**
-   * Safely extracts first result item (for single-item responses like domain overview)
-   * @param response - DataForSEO API response
-   * @returns First result item from first successful task
-   */
-  static extractFirstResultItem(response: DataForSEOResponse): any {
-    const results = this.extractFirstTaskResults(response);
-    
-    if (results.length === 0) {
-      throw new Error('No results found in DataForSEO response');
-    }
-
-    return results[0];
-  }
-
-  /**
-   * Safely extracts all result items (for responses that might have multiple items)
-   * @param response - DataForSEO API response  
-   * @returns All result items from first successful task
-   */
-  static extractAllResultItems(response: DataForSEOResponse): any[] {
-    return this.extractFirstTaskResults(response);
-  }
-
-  /**
-   * Extracts task metadata for each task
-   * @param response - DataForSEO API response
-   * @returns Array of task metadata
-   */
-  static extractTasksMetadata(response: DataForSEOResponse): Array<{
-    id?: string;
-    status_code?: number;
-    status_message?: string;
-    cost?: number;
-    result_count?: number;
-    success: boolean;
-  }> {
-    if (!response?.tasks || !Array.isArray(response.tasks)) {
-      return [];
-    }
-
-    return response.tasks.map(task => ({
-      id: task.id,
-      status_code: task.status_code,
-      status_message: task.status_message,
-      cost: task.cost,
-      result_count: task.result_count,
-      success: task.status_code === 20000
-    }));
-  }
 
   /**
    * Calculates total cost from all tasks
@@ -223,12 +145,6 @@ export class DataForSEOResponseHandler {
   }
 }
 
-// Helper types for better TypeScript support
-export type DataForSEOExtractorMethod = 
-  | 'extractAllResults'
-  | 'extractFirstTaskResults'  
-  | 'extractFirstResultItem'
-  | 'extractAllResultItems';
 
 // Export common extraction patterns
 export const DataForSEOExtractors = {
@@ -244,20 +160,4 @@ export const DataForSEOExtractors = {
   // For keyword data (multiple items expected)
   keywordResults: (response: DataForSEOResponse) => 
     DataForSEOResponseHandler.extractFirstTaskResults(response),
-  
-  // For domain overview (single item expected)
-  domainOverview: (response: DataForSEOResponse) => 
-    DataForSEOResponseHandler.extractFirstResultItem(response),
-  
-  // For backlinks overview (single item expected)
-  backlinksOverview: (response: DataForSEOResponse) => 
-    DataForSEOResponseHandler.extractFirstResultItem(response),
-  
-  // For backlinks list (multiple items expected)
-  backlinksList: (response: DataForSEOResponse) => 
-    DataForSEOResponseHandler.extractFirstTaskResults(response),
-  
-  // For domain technologies (single item expected)
-  domainTechnologies: (response: DataForSEOResponse) => 
-    DataForSEOResponseHandler.extractFirstResultItem(response)
 };

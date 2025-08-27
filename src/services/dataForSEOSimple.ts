@@ -18,18 +18,6 @@ export interface SimpleKeywordRequest {
   language_code?: string;
 }
 
-export interface SimpleBacklinksRequest {
-  target: string;
-  limit?: number;
-  offset?: number;
-  include_subdomains?: boolean;
-}
-
-export interface SimpleDomainRequest {
-  target: string;
-  location_code?: number;
-  language_code?: string;
-}
 
 // HTTP client utility
 const createHttpClient = () => {
@@ -148,81 +136,6 @@ export const getKeywordDataExtended = async (params: SimpleKeywordRequest & { da
   }, 'getKeywordDataExtended');
 };
 
-export const getKeywordSuggestions = async (params: SimpleKeywordRequest) => {
-  const client = createHttpClient();
-  
-  return withRetry(async () => {
-    // DataForSEO Labs keyword suggestions expects single keyword, not array
-    // If multiple keywords provided, use first one
-    const keyword = Array.isArray(params.keywords) ? params.keywords[0] : params.keywords[0];
-    
-    const requestData = [{
-      keyword: keyword,
-      location_code: params.location_code || 2840,
-      language_code: params.language_code || 'en',
-      limit: 100,
-      include_seed_keyword: true,
-      include_serp_info: true
-    }];
-
-    return await client.postRaw(dataForSEOConfig.endpoints.KEYWORDS_SUGGESTIONS, requestData);
-  }, 'getKeywordSuggestions');
-};
-
-// Backlinks Operations  
-export const getBacklinksOverview = async (params: SimpleBacklinksRequest) => {
-  const client = createHttpClient();
-  
-  return withRetry(async () => {
-    const data = [{
-      target: params.target,
-      include_subdomains: params.include_subdomains || false
-    }];
-
-    return await client.post('/v3/backlinks/summary/live', data);
-  }, 'getBacklinksOverview');
-};
-
-export const getBulkBacklinks = async (params: SimpleBacklinksRequest) => {
-  const client = createHttpClient();
-  
-  return withRetry(async () => {
-    const data = [{
-      target: params.target,
-      limit: params.limit || 100,
-      offset: params.offset || 0,
-      include_subdomains: params.include_subdomains || false
-    }];
-
-    return await client.post('/v3/backlinks/backlinks/live', data);
-  }, 'getBulkBacklinks');
-};
-
-// Domain Operations
-export const getDomainOverview = async (params: SimpleDomainRequest) => {
-  const client = createHttpClient();
-  
-  return withRetry(async () => {
-    const data = {
-      target: params.target
-    };
-
-    return await client.post('/v3/domain_analytics/whois/overview/live', data);
-  }, 'getDomainOverview');
-};
-
-export const getDomainTechnologies = async (params: SimpleDomainRequest) => {
-  const client = createHttpClient();
-  
-  return withRetry(async () => {
-    const data = {
-      target: params.target
-    };
-
-    return await client.post('/v3/domain_analytics/technologies/domain_technologies/live', data);
-  }, 'getDomainTechnologies');
-};
-
 // Google Paid Ads Operations
 export const searchGooglePaidAds = async (params: SimpleSearchRequest) => {
   const client = createHttpClient();
@@ -237,42 +150,4 @@ export const searchGooglePaidAds = async (params: SimpleSearchRequest) => {
 
     return await client.post('/v3/serp/google/ads_search/live/advanced', data);
   }, 'searchGooglePaidAds');
-};
-
-// Batch Operations
-export const batchKeywordAnalysis = async (keywords: string[], options: { location_code?: number; language_code?: string } = {}) => {
-  try {
-    // Get keyword data
-    const keywordDataPromise = getKeywordData({
-      keywords,
-      location_code: options.location_code,
-      language_code: options.language_code
-    }).catch(error => {
-      logInfo('Keyword data request failed in batch', { error: error.message });
-      return null;
-    });
-
-    // Get SERP data for each keyword
-    const serpPromises = keywords.map(keyword => 
-      searchGoogleOrganic({
-        keyword,
-        location_code: options.location_code,
-        language_code: options.language_code
-      }).then(data => ({ keyword, data, error: null }))
-      .catch(error => ({ keyword, data: null, error: error.message }))
-    );
-
-    const [keywordData, ...serpResults] = await Promise.all([
-      keywordDataPromise,
-      ...serpPromises
-    ]);
-
-    return {
-      keywordData,
-      serpResults
-    };
-  } catch (error) {
-    logInfo('Batch keyword analysis failed', { error });
-    throw handleApiError(error, 'batchKeywordAnalysis');
-  }
 };

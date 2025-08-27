@@ -178,104 +178,13 @@ class BatchProcessor {
     };
   }
 
-  // Validate batch request structure
-  static validateBatchRequest(req: Request, res: Response, next: NextFunction) {
-    const processedRes = res as ProcessedResponse;
-    const { items } = req.body;
-
-    if (!Array.isArray(items)) {
-      return processedRes.apiBadRequest('Batch request must contain an "items" array');
-    }
-
-    if (items.length === 0) {
-      return processedRes.apiBadRequest('Batch request cannot be empty');
-    }
-
-    // Validate each item has required fields
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (!item.id) {
-        return processedRes.apiBadRequest(`Item at index ${i} is missing required "id" field`);
-      }
-      if (!item.data) {
-        return processedRes.apiBadRequest(`Item at index ${i} is missing required "data" field`);
-      }
-    }
-
-    next();
-  }
-
-  // Create batch items from array of data
-  static createBatchItems(dataArray: any[], priority: BatchItem['priority'] = 'normal'): BatchItem[] {
-    return dataArray.map((data, index) => ({
-      id: `batch_item_${index}_${Date.now()}`,
-      data,
-      priority
-    }));
-  }
-
-  // Split large batches into smaller chunks
-  static splitIntoBatches<T>(items: T[], batchSize: number): T[][] {
-    const batches: T[][] = [];
-    for (let i = 0; i < items.length; i += batchSize) {
-      batches.push(items.slice(i, i + batchSize));
-    }
-    return batches;
-  }
 }
 
-// Middleware for automatic batch splitting
-export const autoBatchSplitter = (maxBatchSize: number = 10) => {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const { keywords, domains } = req.body;
-
-    // Auto-split keywords array if too large
-    if (Array.isArray(keywords) && keywords.length > maxBatchSize) {
-      req.body.keywords = keywords.slice(0, maxBatchSize);
-      res.setHeader('X-Batch-Truncated', 'true');
-      res.setHeader('X-Original-Count', keywords.length.toString());
-      res.setHeader('X-Processed-Count', maxBatchSize.toString());
-    }
-
-    // Auto-split domains array if too large
-    if (Array.isArray(domains) && domains.length > maxBatchSize) {
-      req.body.domains = domains.slice(0, maxBatchSize);
-      res.setHeader('X-Batch-Truncated', 'true');
-      res.setHeader('X-Original-Count', domains.length.toString());
-      res.setHeader('X-Processed-Count', maxBatchSize.toString());
-    }
-
-    next();
-  };
-};
-
-// Priority queue for batch processing
-class PriorityQueue<T> {
-  private queue: Array<{ item: T; priority: number }> = [];
-
-  enqueue(item: T, priority: number = 0) {
-    this.queue.push({ item, priority });
-    this.queue.sort((a, b) => b.priority - a.priority);
-  }
-
-  dequeue(): T | undefined {
-    return this.queue.shift()?.item;
-  }
-
-  size(): number {
-    return this.queue.length;
-  }
-
-  isEmpty(): boolean {
-    return this.queue.length === 0;
-  }
-}
 
 export { 
   BatchProcessor, 
   BatchItem, 
   BatchResult, 
   BatchResponse, 
-  BatchRequestConfig,
-  PriorityQueue 
+  BatchRequestConfig
 };

@@ -5,16 +5,8 @@ import {
   searchGoogleOrganic,
   searchGooglePaidAds,
   getKeywordData,
-  getKeywordSuggestions,
-  getBacklinksOverview,
-  getBulkBacklinks,
-  getDomainOverview,
-  getDomainTechnologies,
-  batchKeywordAnalysis,
   SimpleSearchRequest,
-  SimpleKeywordRequest,
-  SimpleBacklinksRequest,
-  SimpleDomainRequest
+  SimpleKeywordRequest
 } from './dataForSEOSimple';
 
 import {
@@ -65,27 +57,14 @@ export const getDataForSEOConfig = () => ({
   costLimits: dataForSEOConfig.getCostLimits()
 });
 
-// Re-export all functional utilities for easy access
+// Re-export only used utilities
 export {
-  
   // SERP operations
   searchGoogleOrganic,
   searchGooglePaidAds,
   
   // Keywords operations
   getKeywordData,
-  getKeywordSuggestions,
-  
-  // Backlinks operations
-  getBacklinksOverview,
-  getBulkBacklinks,
-  
-  // Domain analytics operations
-  getDomainOverview,
-  getDomainTechnologies,
-  
-  // Batch operations
-  batchKeywordAnalysis,
   
   // Error handling utilities
   handleApiError,
@@ -134,21 +113,14 @@ export const getServiceStatus = () => {
     },
     availableOperations: [
       'searchGoogleOrganic',
-      'getKeywordData', 
-      'getKeywordSuggestions',
-      'getBacklinksOverview',
-      'getBulkBacklinks',
-      'getDomainOverview',
-      'getDomainTechnologies',
-      'batchKeywordAnalysis'
+      'searchGooglePaidAds',
+      'getKeywordData'
     ]
   };
 };
 
-// Usage examples and type exports
+// Type exports
 export type {
   SimpleSearchRequest,
-  SimpleKeywordRequest,
-  SimpleBacklinksRequest,
-  SimpleDomainRequest
+  SimpleKeywordRequest
 };

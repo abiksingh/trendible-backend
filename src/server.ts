@@ -1,7 +1,6 @@
 import express, { Express, Request, Response } from 'express';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
-import userRoutes from './routes/userRoutes';
 import seoRoutes from './routes/seoRoutes';
 import { logInfo } from './utils/dataForSEOLogger';
 
@@ -72,7 +71,6 @@ app.get('/', (req: Request, res: any) => {
     status: 'running',
     phase: 'Phase 3 - Frontend Integration Layer',
     services: {
-      users: '/api/users',
       seo: '/api/seo'
     },
     documentation: '/api/seo/docs',
@@ -92,7 +90,6 @@ app.get('/', (req: Request, res: any) => {
 });
 
 // API Routes
-app.use('/api/users', userRoutes);
 app.use('/api/seo', seoRoutes);
 
 app.listen(port, () => {
@@ -104,10 +101,9 @@ app.listen(port, () => {
   logInfo('Trendible Backend started successfully', {
     port,
     environment: process.env.NODE_ENV || 'development',
-    services: ['users', 'seo'],
+    services: ['seo'],
     endpoints: {
       root: '/',
-      users: '/api/users',
       seo: '/api/seo',
       docs: '/api/seo/docs',
       status: '/api/seo/status'
