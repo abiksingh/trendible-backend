@@ -202,6 +202,70 @@ export const getKeywordDifficultyScore = async (keyword: string, locationCode: n
   }
 };
 
+export const getBingSearchVolume = async (keyword: string, locationCode: number, languageCode: string) => {
+  const startTime = Date.now();
+  
+  try {
+    const client = createHttpClient();
+    const data = {
+      keywords: [keyword],
+      location_code: locationCode,
+      language_code: languageCode
+    };
+
+    const result = await client.post('/v3/keywords_data/bing/search_volume/live', data);
+    
+    if (result.status_code !== 20000) {
+      throw new Error(`Bing search volume API error: ${result.status_message}`);
+    }
+
+    // Bing API returns data directly in result[0], not nested in items
+    const taskResult = result.tasks?.[0]?.result?.[0] || {};
+    const cost = result.tasks?.[0]?.cost || 0;
+
+    return {
+      data: taskResult,
+      cost,
+      processing_time: Date.now() - startTime
+    };
+  } catch (error) {
+    logError('Bing search volume request failed', { keyword, error });
+    throw error;
+  }
+};
+
+export const getBingKeywordDifficulty = async (keyword: string, locationCode: number, languageCode: string) => {
+  const startTime = Date.now();
+  
+  try {
+    const client = createHttpClient();
+    const data = {
+      keywords: [keyword],
+      location_code: locationCode,
+      language_code: languageCode
+    };
+
+    const result = await client.post('/v3/dataforseo_labs/bing/bulk_keyword_difficulty/live', data);
+    
+    if (result.status_code !== 20000) {
+      throw new Error(`Bing keyword difficulty API error: ${result.status_message}`);
+    }
+
+    const items = result.tasks?.[0]?.result?.[0]?.items || [];
+    const cost = result.tasks?.[0]?.cost || 0;
+    const keywordResult = items.find((item: any) => item.keyword === keyword);
+
+    return {
+      data: keywordResult || {},
+      cost,
+      processing_time: Date.now() - startTime
+    };
+  } catch (error) {
+    logError('Bing keyword difficulty request failed', { keyword, error });
+    throw error;
+  }
+};
+
 // Helper Functions
 
 const getMonthName = (monthNumber: number): string => {
@@ -224,6 +288,58 @@ const getDifficultyLevel = (score: number): 'LOW' | 'MEDIUM' | 'HIGH' => {
   return 'LOW';
 };
 
+const calculateBingTrends = (monthlySearches: any[]) => {
+  if (!monthlySearches || monthlySearches.length < 2) {
+    return {
+      monthly: null,
+      quarterly: null,
+      yearly: null
+    };
+  }
+
+  const trends: any = {};
+
+  // Monthly trend (last month vs previous month)
+  if (monthlySearches.length >= 2) {
+    const lastMonth = monthlySearches[monthlySearches.length - 1]?.search_volume || 0;
+    const prevMonth = monthlySearches[monthlySearches.length - 2]?.search_volume || 0;
+    
+    if (prevMonth > 0) {
+      trends.monthly = Math.round(((lastMonth - prevMonth) / prevMonth) * 100);
+    }
+  }
+
+  // Quarterly trend (last 3 months vs previous 3 months)
+  if (monthlySearches.length >= 6) {
+    const lastQuarter = monthlySearches.slice(-3);
+    const prevQuarter = monthlySearches.slice(-6, -3);
+    
+    const lastQuarterAvg = lastQuarter.reduce((sum, item) => sum + (item.search_volume || 0), 0) / 3;
+    const prevQuarterAvg = prevQuarter.reduce((sum, item) => sum + (item.search_volume || 0), 0) / 3;
+    
+    if (prevQuarterAvg > 0) {
+      trends.quarterly = Math.round(((lastQuarterAvg - prevQuarterAvg) / prevQuarterAvg) * 100);
+    }
+  }
+
+  // Yearly trend (only if 12+ months available)
+  if (monthlySearches.length >= 12) {
+    const lastYear = monthlySearches.slice(-12);
+    const prevYear = monthlySearches.length >= 24 ? monthlySearches.slice(-24, -12) : null;
+    
+    if (prevYear) {
+      const lastYearTotal = lastYear.reduce((sum, item) => sum + (item.search_volume || 0), 0);
+      const prevYearTotal = prevYear.reduce((sum, item) => sum + (item.search_volume || 0), 0);
+      
+      if (prevYearTotal > 0) {
+        trends.yearly = Math.round(((lastYearTotal - prevYearTotal) / prevYearTotal) * 100);
+      }
+    }
+  }
+
+  return trends;
+};
+
 
 // Main Intelligence Function
 
@@ -237,27 +353,24 @@ export const getKeywordIntelligence = async (params: KeywordIntelligenceParams):
     source
   });
 
-  if (source !== 'google') {
-    throw new Error('Only Google source is supported in this version');
-  }
-
   let totalCost = 0;
-  const sourcesQueried: string[] = ['google'];
+  const sourcesQueried: string[] = [source];
 
   try {
-    // Execute all three API calls in parallel for Phase 1: Core Metrics
-    const [historicalData, searchIntentData, difficultyData] = await Promise.all([
-      getHistoricalKeywordData(keyword, location_code, language_code),
-      getSearchIntent(keyword, language_code),
-      getKeywordDifficultyScore(keyword, location_code, language_code)
-    ]);
+    if (source === 'google') {
+      // Execute all three API calls in parallel for Google
+      const [historicalData, searchIntentData, difficultyData] = await Promise.all([
+        getHistoricalKeywordData(keyword, location_code, language_code),
+        getSearchIntent(keyword, language_code),
+        getKeywordDifficultyScore(keyword, location_code, language_code)
+      ]);
 
-    totalCost = historicalData.cost + searchIntentData.cost + difficultyData.cost;
+      totalCost = historicalData.cost + searchIntentData.cost + difficultyData.cost;
 
-    // Extract core metrics from API responses
-    const historical = historicalData.data;
-    const intent = searchIntentData.data;
-    const difficulty = difficultyData.data;
+      // Extract core metrics from API responses
+      const historical = historicalData.data;
+      const intent = searchIntentData.data;
+      const difficulty = difficultyData.data;
 
     // Phase 1: Process Core Metrics
 
@@ -327,41 +440,161 @@ export const getKeywordIntelligence = async (params: KeywordIntelligenceParams):
       total_months: monthlySearches.length
     };
 
-    return {
-      core_metrics: {
-        search_volume: searchVolume,
-        search_intent: searchIntent,
-        trend_volume: {
-          latest_trend: latestTrend.toString(),
-          direction: trendDirection,
-          period: trendPeriod,
-          all_trends: {
-            monthly: searchVolumeTrend.monthly,
-            quarterly: searchVolumeTrend.quarterly,
-            yearly: searchVolumeTrend.yearly
+      return {
+        core_metrics: {
+          search_volume: searchVolume,
+          search_intent: searchIntent,
+          trend_volume: {
+            latest_trend: latestTrend.toString(),
+            direction: trendDirection,
+            period: trendPeriod,
+            all_trends: {
+              monthly: searchVolumeTrend.monthly,
+              quarterly: searchVolumeTrend.quarterly,
+              yearly: searchVolumeTrend.yearly
+            }
+          },
+          competition: {
+            score: competitionScore,
+            percentage: competitionPercentage,
+            level: competitionLevel
+          },
+          keyword_difficulty: {
+            score: difficultyScore,
+            level: difficultyLevel
+          },
+          cost_per_click: {
+            amount: cpc,
+            currency: 'USD'
           }
         },
-        competition: {
-          score: competitionScore,
-          percentage: competitionPercentage,
-          level: competitionLevel
+        historical_volume: {
+          data_points: historyDataPoints,
+          data_range: dateRange
         },
-        keyword_difficulty: {
-          score: difficultyScore,
-          level: difficultyLevel
+        sources_queried: sourcesQueried,
+        total_cost: totalCost
+      };
+
+    } else if (source === 'bing') {
+      // Execute Bing API calls in parallel (reuse Google search intent)
+      const [bingVolumeData, bingDifficultyData, googleIntentData] = await Promise.all([
+        getBingSearchVolume(keyword, location_code, language_code),
+        getBingKeywordDifficulty(keyword, location_code, language_code),
+        getSearchIntent(keyword, language_code) // Reuse Google intent
+      ]);
+
+      totalCost = bingVolumeData.cost + bingDifficultyData.cost + googleIntentData.cost;
+
+      // Extract Bing metrics
+      const bingVolume = bingVolumeData.data;
+      const bingDifficulty = bingDifficultyData.data;
+      const intent = googleIntentData.data;
+
+      // Process Bing core metrics
+      const searchVolume = bingVolume.search_volume || 0;
+      
+      // Search Intent (reused from Google)
+      const searchIntent = {
+        label: intent.keyword_intent?.label || 'informational',
+        probability: intent.keyword_intent?.probability || 0
+      };
+
+      // Calculate Bing trends manually
+      const monthlySearches = bingVolume.monthly_searches || [];
+      const calculatedTrends = calculateBingTrends(monthlySearches);
+      
+      // Determine latest trend priority: monthly > quarterly > yearly
+      let latestTrend = 'stable';
+      let trendDirection: 'up' | 'down' | 'stable' = 'stable';
+      let trendPeriod: 'monthly' | 'quarterly' | 'yearly' | 'stable' = 'stable';
+      
+      if (calculatedTrends.monthly !== null && calculatedTrends.monthly !== 0) {
+        latestTrend = calculatedTrends.monthly > 0 ? `+${calculatedTrends.monthly}%` : `${calculatedTrends.monthly}%`;
+        trendDirection = calculatedTrends.monthly > 0 ? 'up' : 'down';
+        trendPeriod = 'monthly';
+      } else if (calculatedTrends.quarterly !== null && calculatedTrends.quarterly !== 0) {
+        latestTrend = calculatedTrends.quarterly > 0 ? `+${calculatedTrends.quarterly}%` : `${calculatedTrends.quarterly}%`;
+        trendDirection = calculatedTrends.quarterly > 0 ? 'up' : 'down';
+        trendPeriod = 'quarterly';
+      } else if (calculatedTrends.yearly !== null && calculatedTrends.yearly !== 0) {
+        latestTrend = calculatedTrends.yearly > 0 ? `+${calculatedTrends.yearly}%` : `${calculatedTrends.yearly}%`;
+        trendDirection = calculatedTrends.yearly > 0 ? 'up' : 'down';
+        trendPeriod = 'yearly';
+      }
+
+      // Competition and difficulty processing (same logic as Google)
+      const competitionScore = bingVolume.competition || 0;
+      const competitionPercentage = Math.round(competitionScore * 100);
+      const competitionLevel = getCompetitionLevel(competitionPercentage);
+      
+      const difficultyScore = bingDifficulty.keyword_difficulty || 0;
+      const difficultyLevel = getDifficultyLevel(difficultyScore);
+      
+      const cpc = bingVolume.cpc || 0;
+
+      // Process historical volume data (same logic as Google)
+      const historyDataPoints = monthlySearches.map((item: any) => ({
+        month: getMonthName(item.month || 1),
+        year: item.year || new Date().getFullYear(),
+        search_volume: item.search_volume || 0
+      }));
+
+      // Sort chronologically (same logic as Google)
+      historyDataPoints.sort((a: { month: string; year: number; search_volume: number }, b: { month: string; year: number; search_volume: number }) => {
+        if (a.year !== b.year) return a.year - b.year;
+        const monthIndex = (month: string) => [
+          'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
+        ].indexOf(month);
+        return monthIndex(a.month) - monthIndex(b.month);
+      });
+
+      const dateRange = {
+        start_date: monthlySearches.length > 0 ? `${monthlySearches[0]?.year || 2020}-${String(monthlySearches[0]?.month || 1).padStart(2, '0')}-01` : '',
+        end_date: monthlySearches.length > 0 ? `${monthlySearches[monthlySearches.length - 1]?.year || 2024}-${String(monthlySearches[monthlySearches.length - 1]?.month || 12).padStart(2, '0')}-01` : '',
+        total_months: monthlySearches.length
+      };
+
+      return {
+        core_metrics: {
+          search_volume: searchVolume,
+          search_intent: searchIntent,
+          trend_volume: {
+            latest_trend: latestTrend,
+            direction: trendDirection,
+            period: trendPeriod,
+            all_trends: {
+              monthly: calculatedTrends.monthly,
+              quarterly: calculatedTrends.quarterly,
+              yearly: calculatedTrends.yearly
+            }
+          },
+          competition: {
+            score: competitionScore,
+            percentage: competitionPercentage,
+            level: competitionLevel
+          },
+          keyword_difficulty: {
+            score: difficultyScore,
+            level: difficultyLevel
+          },
+          cost_per_click: {
+            amount: cpc,
+            currency: 'USD'
+          }
         },
-        cost_per_click: {
-          amount: cpc,
-          currency: 'USD'
-        }
-      },
-      historical_volume: {
-        data_points: historyDataPoints,
-        data_range: dateRange
-      },
-      sources_queried: sourcesQueried,
-      total_cost: totalCost
-    };
+        historical_volume: {
+          data_points: historyDataPoints,
+          data_range: dateRange
+        },
+        sources_queried: sourcesQueried,
+        total_cost: totalCost
+      };
+    
+    } else {
+      throw new Error(`Unsupported source: ${source}. Only 'google' and 'bing' are supported.`);
+    }
 
   } catch (error) {
     logError('Keyword intelligence research failed', error);
