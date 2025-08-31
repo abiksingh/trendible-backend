@@ -1,9 +1,13 @@
 import express, { Express, Request, Response } from 'express';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
+import session from 'express-session';
 import seoRoutes from './routes/seoRoutes';
 import userRoutes from './routes/userRoutes';
+import authRoutes from './routes/authRoutes';
 import { logInfo } from './utils/dataForSEOLogger';
+import { authConfig } from './config/authConfig';
+import passport from './config/passportConfig';
 
 // Import Phase 3 middleware
 import { 
@@ -41,22 +45,27 @@ app.use(corsConfig);
 // 3. API versioning
 app.use(apiVersioning);
 
-// 4. Body parsing with validation
+// 4. Session and authentication middleware
+app.use(session(authConfig.session));
+app.use(passport.initialize());
+app.use(passport.session());
+
+// 5. Body parsing with validation
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(validateContentType);
 app.use(validateBodySize);
 
-// 5. Input sanitization
+// 6. Input sanitization
 app.use(InputValidator.sanitize);
 
-// 6. Response formatting
+// 7. Response formatting
 app.use(responseFormatter);
 
-// 7. Request timeout protection
+// 8. Request timeout protection
 app.use(requestTimeout(120000)); // 2 minutes
 
-// 8. Batch processing middleware
+// 9. Batch processing middleware
 app.use(BatchProcessor.batchMiddleware({
   maxBatchSize: 20,
   maxConcurrency: 5,
@@ -73,7 +82,8 @@ app.get('/', (req: Request, res: any) => {
     phase: 'Phase 3 - Frontend Integration Layer',
     services: {
       seo: '/api/seo',
-      users: '/api/users'
+      users: '/api/users',
+      auth: '/api/auth'
     },
     documentation: '/api/seo/docs',
     features: [
@@ -92,25 +102,30 @@ app.get('/', (req: Request, res: any) => {
 });
 
 // API Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/seo', seoRoutes);
 app.use('/api/users', userRoutes);
 
 app.listen(port, () => {
   console.log(`🚀 Server is running on http://localhost:${port}`);
+  console.log(`🔐 Auth API available at http://localhost:${port}/api/auth`);
   console.log(`📊 SEO API available at http://localhost:${port}/api/seo`);
   console.log(`👥 Users API available at http://localhost:${port}/api/users`);
-  console.log(`📖 API Documentation at http://localhost:${port}/api/seo/docs`);
+  console.log(`📖 Auth Documentation at http://localhost:${port}/api/auth/docs`);
+  console.log(`📖 SEO Documentation at http://localhost:${port}/api/seo/docs`);
   console.log(`📄 Users Documentation at http://localhost:${port}/api/users/docs`);
   console.log(`🏥 Health Check at http://localhost:${port}/api/seo/status`);
   
   logInfo('Trendible Backend started successfully', {
     port,
     environment: process.env.NODE_ENV || 'development',
-    services: ['seo', 'users'],
+    services: ['auth', 'seo', 'users'],
     endpoints: {
       root: '/',
+      auth: '/api/auth',
       seo: '/api/seo',
       users: '/api/users',
+      authDocs: '/api/auth/docs',
       docs: '/api/seo/docs',
       userDocs: '/api/users/docs',
       status: '/api/seo/status'

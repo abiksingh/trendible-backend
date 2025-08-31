@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
-import { userService, CreateUserData, UpdateUserData } from '../services/userService';
+import { userService, RegisterUserData, UpdateUserData } from '../services/userService';
 import { handleGeneralError } from '../utils/generalErrorHandler';
 import { logInfo, logError } from '../utils/dataForSEOLogger';
 import { ProcessedResponse } from '../middleware/responseFormatter';
 
 interface CreateUserRequest extends Request {
-  body: CreateUserData;
+  body: RegisterUserData;
 }
 
 interface UpdateUserRequest extends Request {
@@ -27,10 +27,10 @@ export const userController = {
     const startTime = Date.now();
     
     try {
-      const { email, name } = req.body;
+      const { email, password, name } = req.body;
 
-      if (!email) {
-        return processedRes.apiBadRequest('Email is required');
+      if (!email || !password) {
+        return processedRes.apiBadRequest('Email and password are required');
       }
 
       const emailExists = await userService.checkEmailExists(email);
@@ -40,7 +40,7 @@ export const userController = {
 
       logInfo('User creation request', { email, name });
 
-      const user = await userService.createUser({ email, name });
+      const user = await userService.registerUser({ email, password, name });
       const responseTime = Date.now() - startTime;
 
       processedRes.apiSuccess({
