@@ -21,8 +21,8 @@ export interface SimpleKeywordRequest {
 
 // HTTP client utility
 const createHttpClient = () => {
-  const baseURL = dataForSEOConfig.baseUrl;
-  const auth = btoa(`${dataForSEOConfig.credentials.username}:${dataForSEOConfig.credentials.password}`);
+  const baseURL = dataForSEOConfig.instance.baseUrl;
+  const auth = btoa(`${dataForSEOConfig.instance.credentials.username}:${dataForSEOConfig.instance.credentials.password}`);
   
   return {
     async post(endpoint: string, data: any) {

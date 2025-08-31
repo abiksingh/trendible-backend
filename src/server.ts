@@ -25,7 +25,8 @@ import {
 import { InputValidator } from './middleware/inputValidator';
 import { BatchProcessor } from './middleware/batchProcessor';
 
-dotenv.config();
+const envFile = process.env.NODE_ENV === 'production' ? '.env.prod' : '.env.local';
+dotenv.config({ path: envFile });
 
 export const prisma = new PrismaClient();
 

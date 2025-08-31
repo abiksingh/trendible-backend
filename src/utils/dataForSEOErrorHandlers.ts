@@ -108,8 +108,8 @@ export const handleApiError = (error: any, endpoint?: string): DataForSEOError =
 export const withRetry = async <T>(
   operation: () => Promise<T>,
   endpoint: string,
-  maxRetries: number = dataForSEOConfig.retry.MAX_RETRIES,
-  baseDelay: number = dataForSEOConfig.retry.BASE_DELAY
+  maxRetries: number = dataForSEOConfig.instance.retry.MAX_RETRIES,
+  baseDelay: number = dataForSEOConfig.instance.retry.BASE_DELAY
 ): Promise<T> => {
   let lastError: DataForSEOError;
   let totalCost = 0;

@@ -57,8 +57,8 @@ export interface KeywordIntelligenceResult {
 
 // HTTP Client for DataForSEO API calls
 const createHttpClient = () => {
-  const baseURL = dataForSEOConfig.baseUrl;
-  const auth = btoa(`${dataForSEOConfig.credentials.username}:${dataForSEOConfig.credentials.password}`);
+  const baseURL = dataForSEOConfig.instance.baseUrl;
+  const auth = btoa(`${dataForSEOConfig.instance.credentials.username}:${dataForSEOConfig.instance.credentials.password}`);
   
   return {
     async post(endpoint: string, data: any) {

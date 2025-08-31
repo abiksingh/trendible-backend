@@ -32,10 +32,10 @@ export const testDataForSEOConnection = async (): Promise<boolean> => {
   const endpoint = '/v3/user';
   
   try {
-    const response = await fetch(`${dataForSEOConfig.baseUrl}${endpoint}`, {
+    const response = await fetch(`${dataForSEOConfig.instance.baseUrl}${endpoint}`, {
       method: 'GET',
       headers: {
-        'Authorization': `Basic ${btoa(`${dataForSEOConfig.credentials.username}:${dataForSEOConfig.credentials.password}`)}`
+        'Authorization': `Basic ${btoa(`${dataForSEOConfig.instance.credentials.username}:${dataForSEOConfig.instance.credentials.password}`)}`
       }
     });
     
@@ -48,13 +48,13 @@ export const testDataForSEOConnection = async (): Promise<boolean> => {
 
 // Configuration getter
 export const getDataForSEOConfig = () => ({
-  endpoints: dataForSEOConfig.endpoints,
-  defaults: dataForSEOConfig.defaults,
-  rateLimits: dataForSEOConfig.rateLimits,
-  locations: dataForSEOConfig.getLocationOptions(),
-  languages: dataForSEOConfig.getLanguageOptions(),
-  devices: dataForSEOConfig.getDeviceOptions(),
-  costLimits: dataForSEOConfig.getCostLimits()
+  endpoints: dataForSEOConfig.instance.endpoints,
+  defaults: dataForSEOConfig.instance.defaults,
+  rateLimits: dataForSEOConfig.instance.rateLimits,
+  locations: dataForSEOConfig.instance.getLocationOptions(),
+  languages: dataForSEOConfig.instance.getLanguageOptions(),
+  devices: dataForSEOConfig.instance.getDeviceOptions(),
+  costLimits: dataForSEOConfig.instance.getCostLimits()
 });
 
 // Re-export only used utilities

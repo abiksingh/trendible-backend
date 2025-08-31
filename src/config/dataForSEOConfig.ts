@@ -135,8 +135,17 @@ class DataForSEOConfiguration {
   }
 }
 
-// Create singleton instance
-export const dataForSEOConfig = new DataForSEOConfiguration();
+// Create singleton instance with lazy initialization
+let _dataForSEOConfigInstance: DataForSEOConfiguration | null = null;
+
+export const dataForSEOConfig = {
+  get instance(): DataForSEOConfiguration {
+    if (!_dataForSEOConfigInstance) {
+      _dataForSEOConfigInstance = new DataForSEOConfiguration();
+    }
+    return _dataForSEOConfigInstance;
+  }
+};
 
 // Export types for external use
 export type {
