@@ -2,6 +2,7 @@ import express, { Express, Request, Response } from 'express';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import seoRoutes from './routes/seoRoutes';
+import userRoutes from './routes/userRoutes';
 import { logInfo } from './utils/dataForSEOLogger';
 
 // Import Phase 3 middleware
@@ -71,7 +72,8 @@ app.get('/', (req: Request, res: any) => {
     status: 'running',
     phase: 'Phase 3 - Frontend Integration Layer',
     services: {
-      seo: '/api/seo'
+      seo: '/api/seo',
+      users: '/api/users'
     },
     documentation: '/api/seo/docs',
     features: [
@@ -91,21 +93,26 @@ app.get('/', (req: Request, res: any) => {
 
 // API Routes
 app.use('/api/seo', seoRoutes);
+app.use('/api/users', userRoutes);
 
 app.listen(port, () => {
   console.log(`🚀 Server is running on http://localhost:${port}`);
   console.log(`📊 SEO API available at http://localhost:${port}/api/seo`);
+  console.log(`👥 Users API available at http://localhost:${port}/api/users`);
   console.log(`📖 API Documentation at http://localhost:${port}/api/seo/docs`);
+  console.log(`📄 Users Documentation at http://localhost:${port}/api/users/docs`);
   console.log(`🏥 Health Check at http://localhost:${port}/api/seo/status`);
   
   logInfo('Trendible Backend started successfully', {
     port,
     environment: process.env.NODE_ENV || 'development',
-    services: ['seo'],
+    services: ['seo', 'users'],
     endpoints: {
       root: '/',
       seo: '/api/seo',
+      users: '/api/users',
       docs: '/api/seo/docs',
+      userDocs: '/api/users/docs',
       status: '/api/seo/status'
     }
   });
