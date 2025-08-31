@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: postgres:15.14
+    restart: always
+    environment:
+      - POSTGRES_DB=trendible
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=Test1234
+    networks:
+      - intern
+    ports:
+      - 5440:5432
+    volumes:
+      - postgres:/var/lib/postgresql/data
+
+volumes:
+  postgres:
+
+networks:
+  intern:
+  proxy:
+    name: proxy
+    external: true
