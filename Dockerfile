@@ -8,11 +8,8 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma/ ./prisma/
 
-# Install dependencies
-RUN npm ci --only=production
-
-# Install TypeScript globally for building
-RUN npm install -g typescript
+# Install all dependencies (including dev dependencies for build)
+RUN npm ci
 
 # Copy source code
 COPY . .
@@ -22,6 +19,9 @@ RUN npx prisma generate
 
 # Build the application
 RUN npm run build
+
+# Remove dev dependencies after build to keep image small
+RUN npm prune --omit=dev
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs
