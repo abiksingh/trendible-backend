@@ -61,31 +61,24 @@ class DataForSEOConfiguration {
     
     this.baseUrl = process.env.DATAFORSEO_BASE_URL || 'https://api.dataforseo.com';
     
-    // Support both individual credentials and Base64 format
-    if (process.env.DATAFORSEO_BASE64) {
-      const decoded = Buffer.from(process.env.DATAFORSEO_BASE64, 'base64').toString('utf-8');
-      const [username, password] = decoded.split(':');
-      this.credentials = { username, password };
-    } else {
-      this.credentials = {
-        username: process.env.DATAFORSEO_USERNAME!,
-        password: process.env.DATAFORSEO_PASSWORD!
-      };
-    }
+    // Use individual credentials
+    this.credentials = {
+      username: process.env.DATAFORSEO_USERNAME!,
+      password: process.env.DATAFORSEO_PASSWORD!
+    };
     
     this.environment = (process.env.NODE_ENV as any) || 'development';
   }
 
   private validateEnvironmentVariables(): void {
-    // Check if we have Base64 credentials OR individual credentials
-    const hasBase64 = !!process.env.DATAFORSEO_BASE64;
-    const hasIndividual = !!(process.env.DATAFORSEO_USERNAME && process.env.DATAFORSEO_PASSWORD);
+    // Check if we have individual credentials
+    const hasCredentials = !!(process.env.DATAFORSEO_USERNAME && process.env.DATAFORSEO_PASSWORD);
     
-    if (!hasBase64 && !hasIndividual) {
+    if (!hasCredentials) {
       throw new Error(
-        'Missing DataForSEO credentials. Please provide either:\n' +
-        '- DATAFORSEO_BASE64 (Base64 encoded login:password)\n' +
-        '- OR both DATAFORSEO_USERNAME and DATAFORSEO_PASSWORD\n' +
+        'Missing DataForSEO credentials. Please provide both:\n' +
+        '- DATAFORSEO_USERNAME\n' +
+        '- DATAFORSEO_PASSWORD\n' +
         'Please check your .env file and ensure credentials are set.'
       );
     }
