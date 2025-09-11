@@ -79,7 +79,7 @@ class DataForSEOConfiguration {
         'Missing DataForSEO credentials. Please provide both:\n' +
         '- DATAFORSEO_USERNAME\n' +
         '- DATAFORSEO_PASSWORD\n' +
-        'Please check your .env file and ensure credentials are set.'
+        'Please check your .env.local file and ensure credentials are set.'
       );
     }
   }

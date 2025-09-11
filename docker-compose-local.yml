@@ -9,7 +9,7 @@ services:
     networks:
       - intern
     ports:
-      - 5440:5432
+      - 5432:5432
     volumes:
       - postgres:/var/lib/postgresql/data
 
