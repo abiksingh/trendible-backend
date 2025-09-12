@@ -13,7 +13,7 @@ export const authConfig = {
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: process.env.NODE_ENV === 'production',
+      secure: false, // temporarily disabled for testing mobile issue
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
