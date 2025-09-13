@@ -21,7 +21,8 @@ router.get('/status', async (req, res) => {
       configuration: status.configuration,
       available_endpoints: {
         research: [
-          'POST /api/seo/research/keyword-intelligence - Comprehensive keyword analysis'
+          'POST /api/seo/research/keyword-intelligence - Comprehensive keyword analysis',
+          'POST /api/seo/research/keyword-enhanced-analytics - Enhanced analytics with search volume, global distribution, and demographics'
         ]
       },
       timestamp: new Date().toISOString()
@@ -68,6 +69,36 @@ router.get('/docs', (req, res) => {
           difficulty_score: 'Keyword difficulty',
           monthly_searches: 'Historical search trends',
           search_volume_source: 'Data quality indicator'
+        }
+      },
+      '/research/keyword-enhanced-analytics': {
+        method: 'POST',
+        description: 'Get enhanced keyword analytics combining search volume history, global country distribution, and demographic trends',
+        body: {
+          keyword: 'string (required) - Target keyword to analyze',
+          location_code: 'number (optional) - Location code (default: 2840 US)',
+          language_code: 'string (optional) - Language code (default: en)',
+          location_name: 'string (optional) - Location name for demographics (default: United States)'
+        },
+        example: {
+          keyword: 'artificial intelligence',
+          location_code: 2840,
+          language_code: 'en',
+          location_name: 'United States'
+        },
+        response: {
+          search_volume_data: {
+            avg_monthly_search: 'Current average monthly search volume',
+            historical_data: 'Monthly search volume history'
+          },
+          global_distribution: {
+            total_volume: 'Total global search volume',
+            countries: 'Top countries by search volume and percentage'
+          },
+          demographics: {
+            age_distribution: 'Age group breakdown (18-24, 25-34, 35-44, 45-54, 55-64)',
+            gender_distribution: 'Male/female distribution'
+          }
         }
       }
     },

@@ -266,6 +266,124 @@ export const getBingKeywordDifficulty = async (keyword: string, locationCode: nu
   }
 };
 
+// Enhanced Analytics API Functions
+
+export const getClickstreamSearchVolume = async (keyword: string, locationCode?: number, languageCode?: string) => {
+  const startTime = Date.now();
+  
+  try {
+    const client = createHttpClient();
+    const data: any = {
+      keywords: [keyword]
+    };
+    
+    if (locationCode) data.location_code = locationCode;
+    if (languageCode) data.language_code = languageCode;
+
+    const result = await client.post('/v3/keywords_data/clickstream_data/dataforseo_search_volume/live', data);
+    
+    logInfo('Clickstream search volume API response', {
+      keyword,
+      status_code: result.status_code,
+      status_message: result.status_message
+    });
+    
+    if (result.status_code !== 20000) {
+      throw new Error(`Clickstream search volume API error: ${result.status_message}`);
+    }
+
+    const items = result.tasks?.[0]?.result?.[0]?.items || [];
+    const cost = result.tasks?.[0]?.cost || 0;
+    const keywordResult = items.find((item: any) => item.keyword === keyword) || {};
+
+    return {
+      data: keywordResult,
+      cost,
+      processing_time: Date.now() - startTime
+    };
+  } catch (error) {
+    logError('Clickstream search volume request failed', { keyword, error });
+    throw error;
+  }
+};
+
+export const getGlobalSearchVolume = async (keyword: string) => {
+  const startTime = Date.now();
+  
+  try {
+    const client = createHttpClient();
+    const data = {
+      keywords: [keyword]
+    };
+
+    const result = await client.post('/v3/keywords_data/clickstream_data/global_search_volume/live', data);
+    
+    logInfo('Global search volume API response', {
+      keyword,
+      status_code: result.status_code,
+      status_message: result.status_message
+    });
+    
+    if (result.status_code !== 20000) {
+      throw new Error(`Global search volume API error: ${result.status_message}`);
+    }
+
+    const items = result.tasks?.[0]?.result?.[0]?.items || [];
+    const cost = result.tasks?.[0]?.cost || 0;
+    const keywordResult = items.find((item: any) => item.keyword === keyword) || {};
+
+    return {
+      data: keywordResult,
+      cost,
+      processing_time: Date.now() - startTime
+    };
+  } catch (error) {
+    logError('Global search volume request failed', { keyword, error });
+    throw error;
+  }
+};
+
+export const getDemographicData = async (keyword: string, locationName?: string) => {
+  const startTime = Date.now();
+  
+  try {
+    const client = createHttpClient();
+    const data: any = {
+      keywords: [keyword],
+      type: 'web'
+    };
+    
+    if (locationName) data.location_name = locationName;
+
+    const result = await client.post('/v3/keywords_data/dataforseo_trends/demography/live', data);
+    
+    logInfo('Demographic data API response', {
+      keyword,
+      status_code: result.status_code,
+      status_message: result.status_message
+    });
+    
+    if (result.status_code !== 20000) {
+      throw new Error(`Demographic data API error: ${result.status_message}`);
+    }
+
+    const items = result.tasks?.[0]?.result?.[0]?.items || [];
+    const cost = result.tasks?.[0]?.cost || 0;
+    
+    // Find the first item with demography data since it contains data for all keywords
+    const demographyItem = items.find((item: any) => item.demography) || {};
+
+    return {
+      data: demographyItem,
+      cost,
+      processing_time: Date.now() - startTime
+    };
+  } catch (error) {
+    logError('Demographic data request failed', { keyword, error });
+    throw error;
+  }
+};
+
 // Helper Functions
 
 const getMonthName = (monthNumber: number): string => {
@@ -340,6 +458,238 @@ const calculateBingTrends = (monthlySearches: any[]) => {
   return trends;
 };
 
+
+// Enhanced Analytics Types
+export interface KeywordEnhancedAnalyticsParams {
+  keyword: string;
+  location_code?: number;
+  language_code?: string;
+  location_name?: string;
+}
+
+export interface KeywordEnhancedAnalyticsResult {
+  search_volume_data: {
+    avg_monthly_search: number;
+    historical_data: Array<{
+      month: string;
+      year: number;
+      search_volume: number;
+    }>;
+  };
+  global_distribution: {
+    total_volume: number;
+    countries: Array<{
+      country_name: string;
+      country_iso_code: string;
+      search_volume: number;
+      percentage: number;
+    }>;
+  };
+  demographics: {
+    age_distribution: {
+      "18-24": number;
+      "25-34": number;
+      "35-44": number;
+      "45-54": number;
+      "55-64": number;
+    };
+    gender_distribution: {
+      male: number;
+      female: number;
+    };
+  };
+  sources_queried: string[];
+  total_cost: number;
+}
+
+// Country ISO to Name Mapping
+const getCountryName = (isoCode: string): string => {
+  const countryMap: { [key: string]: string } = {
+    'US': 'United States',
+    'IN': 'India',
+    'TR': 'Turkey',
+    'GB': 'United Kingdom',
+    'DE': 'Germany',
+    'FR': 'France',
+    'BR': 'Brazil',
+    'CA': 'Canada',
+    'AU': 'Australia',
+    'JP': 'Japan',
+    'KR': 'South Korea',
+    'CN': 'China',
+    'RU': 'Russia',
+    'IT': 'Italy',
+    'ES': 'Spain',
+    'MX': 'Mexico',
+    'NL': 'Netherlands',
+    'PL': 'Poland',
+    'SE': 'Sweden',
+    'NO': 'Norway',
+    'DK': 'Denmark',
+    'FI': 'Finland',
+    'CH': 'Switzerland',
+    'AT': 'Austria',
+    'BE': 'Belgium',
+    'IE': 'Ireland',
+    'PT': 'Portugal',
+    'CZ': 'Czech Republic',
+    'HU': 'Hungary',
+    'GR': 'Greece',
+    'IL': 'Israel',
+    'ZA': 'South Africa',
+    'EG': 'Egypt',
+    'NG': 'Nigeria',
+    'SA': 'Saudi Arabia',
+    'AE': 'United Arab Emirates',
+    'TH': 'Thailand',
+    'SG': 'Singapore',
+    'MY': 'Malaysia',
+    'ID': 'Indonesia',
+    'PH': 'Philippines',
+    'VN': 'Vietnam',
+    'AR': 'Argentina',
+    'CL': 'Chile',
+    'CO': 'Colombia',
+    'PE': 'Peru',
+    'VE': 'Venezuela',
+    'UA': 'Ukraine',
+    'RO': 'Romania',
+    'BG': 'Bulgaria',
+    'HR': 'Croatia',
+    'SI': 'Slovenia',
+    'SK': 'Slovakia',
+    'LT': 'Lithuania',
+    'LV': 'Latvia',
+    'EE': 'Estonia'
+  };
+  
+  return countryMap[isoCode] || isoCode;
+};
+
+// Enhanced Analytics Function
+export const getKeywordEnhancedAnalytics = async (params: KeywordEnhancedAnalyticsParams): Promise<KeywordEnhancedAnalyticsResult> => {
+  const { keyword, location_code = 2840, language_code = 'en', location_name = 'United States' } = params;
+  
+  logInfo('Starting enhanced keyword analytics research', {
+    keyword,
+    location_code,
+    language_code,
+    location_name
+  });
+
+  let totalCost = 0;
+  const sourcesQueried: string[] = ['clickstream_search_volume', 'global_search_volume', 'demographic_trends'];
+
+  try {
+    // Execute all three API calls in parallel
+    const [searchVolumeData, globalVolumeData, demographicData] = await Promise.all([
+      getClickstreamSearchVolume(keyword, location_code, language_code),
+      getGlobalSearchVolume(keyword),
+      getDemographicData(keyword, location_name)
+    ]);
+
+    totalCost = searchVolumeData.cost + globalVolumeData.cost + demographicData.cost;
+
+    // Process search volume data
+    const searchVolume = searchVolumeData.data.search_volume || 0;
+    const monthlySearches = searchVolumeData.data.monthly_searches || [];
+    
+    const historicalData = monthlySearches.map((item: any) => ({
+      month: getMonthName(item.month || 1),
+      year: item.year || new Date().getFullYear(),
+      search_volume: item.search_volume || 0
+    }));
+
+    // Sort historical data chronologically
+    historicalData.sort((a: any, b: any) => {
+      if (a.year !== b.year) return a.year - b.year;
+      const monthIndex = (month: string) => [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ].indexOf(month);
+      return monthIndex(a.month) - monthIndex(b.month);
+    });
+
+    // Process global distribution data
+    const totalVolume = globalVolumeData.data.search_volume || 0;
+    const countryDistribution = globalVolumeData.data.country_distribution || [];
+    
+    // Get top 10 countries by percentage
+    const topCountries = countryDistribution
+      .slice(0, 10)
+      .map((country: any) => ({
+        country_name: getCountryName(country.country_iso_code),
+        country_iso_code: country.country_iso_code,
+        search_volume: country.search_volume || 0,
+        percentage: country.percentage || 0
+      }));
+
+    // Process demographic data
+    const demography = demographicData.data.demography || {};
+    const ageData = demography.age || [];
+    const genderData = demography.gender || [];
+
+    // Parse age data from DataForSEO format
+    const ageDistribution = {
+      "18-24": 0,
+      "25-34": 0,
+      "35-44": 0,
+      "45-54": 0,
+      "55-64": 0
+    };
+
+    if (ageData.length > 0) {
+      const keywordAgeData = ageData.find((item: any) => item.keyword === keyword);
+      if (keywordAgeData && keywordAgeData.values) {
+        keywordAgeData.values.forEach((ageItem: any) => {
+          if (ageDistribution.hasOwnProperty(ageItem.type)) {
+            ageDistribution[ageItem.type as keyof typeof ageDistribution] = ageItem.value || 0;
+          }
+        });
+      }
+    }
+
+    // Parse gender data from DataForSEO format  
+    const genderDistribution = {
+      male: 0,
+      female: 0
+    };
+
+    if (genderData.length > 0) {
+      const keywordGenderData = genderData.find((item: any) => item.keyword === keyword);
+      if (keywordGenderData && keywordGenderData.values) {
+        keywordGenderData.values.forEach((genderItem: any) => {
+          if (genderItem.type === 'male') {
+            genderDistribution.male = genderItem.value || 0;
+          } else if (genderItem.type === 'female') {
+            genderDistribution.female = genderItem.value || 0;
+          }
+        });
+      }
+    }
+
+    return {
+      search_volume_data: {
+        avg_monthly_search: searchVolume,
+        historical_data: historicalData
+      },
+      global_distribution: {
+        total_volume: totalVolume,
+        countries: topCountries
+      },
+      demographics: {
+        age_distribution: ageDistribution,
+        gender_distribution: genderDistribution
+      },
+      sources_queried: sourcesQueried,
+      total_cost: totalCost
+    };
+
+  } catch (error) {
+    logError('Enhanced keyword analytics research failed', error);
+    throw error;
+  }
+};
 
 // Main Intelligence Function
 

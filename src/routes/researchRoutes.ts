@@ -10,4 +10,10 @@ router.post('/keyword-intelligence',
   researchController.getKeywordIntelligence
 );
 
+// Enhanced Analytics API
+router.post('/keyword-enhanced-analytics',
+  InputValidator.validate(seoValidationSchemas.keywordEnhancedAnalytics),
+  researchController.getKeywordEnhancedAnalytics
+);
+
 export default router;
