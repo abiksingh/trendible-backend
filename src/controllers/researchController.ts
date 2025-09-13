@@ -3,27 +3,19 @@ import { getKeywordIntelligence, getKeywordEnhancedAnalytics } from '../services
 import { handleApiError } from '../utils/dataForSEOErrorHandlers';
 import { logInfo, logError } from '../utils/dataForSEOLogger';
 import { ProcessedResponse } from '../middleware/responseFormatter';
+import { KeywordIntelligenceRequest, KeywordEnhancedAnalyticsRequest } from '../middleware/inputValidator';
 
-interface KeywordIntelligenceRequest extends Request {
-  body: {
-    keyword: string;
-    location_code?: number;
-    language_code?: string;
-    source: string; // Single data source (google, bing, or youtube)
-  };
+// Extend Express Request with Zod-validated body types
+interface ValidatedKeywordIntelligenceRequest extends Request {
+  body: KeywordIntelligenceRequest;
 }
 
-interface KeywordEnhancedAnalyticsRequest extends Request {
-  body: {
-    keyword: string;
-    location_code?: number;
-    language_code?: string;
-    location_name?: string;
-  };
+interface ValidatedKeywordEnhancedAnalyticsRequest extends Request {
+  body: KeywordEnhancedAnalyticsRequest;
 }
 
 export const researchController = {
-  async getKeywordIntelligence(req: KeywordIntelligenceRequest, res: Response) {
+  async getKeywordIntelligence(req: ValidatedKeywordIntelligenceRequest, res: Response) {
     const processedRes = res as ProcessedResponse;
     const startTime = Date.now();
     
@@ -90,7 +82,7 @@ export const researchController = {
     }
   },
 
-  async getKeywordEnhancedAnalytics(req: KeywordEnhancedAnalyticsRequest, res: Response) {
+  async getKeywordEnhancedAnalytics(req: ValidatedKeywordEnhancedAnalyticsRequest, res: Response) {
     const processedRes = res as ProcessedResponse;
     const startTime = Date.now();
     

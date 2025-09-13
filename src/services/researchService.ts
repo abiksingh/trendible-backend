@@ -274,7 +274,8 @@ export const getClickstreamSearchVolume = async (keyword: string, locationCode?:
   try {
     const client = createHttpClient();
     const data: any = {
-      keywords: [keyword]
+      keywords: [keyword],
+      use_clickstream: true
     };
     
     if (locationCode) data.location_code = locationCode;

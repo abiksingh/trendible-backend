@@ -1,169 +1,120 @@
 import { Request, Response, NextFunction } from 'express';
+import { z, ZodSchema, ZodError } from 'zod';
 import { ProcessedResponse } from './responseFormatter';
 
-interface ValidationRule {
-  field: string;
-  type: 'string' | 'number' | 'boolean' | 'array' | 'object';
-  required?: boolean;
-  min?: number;
-  max?: number;
-  pattern?: RegExp;
-  values?: any[];
-  customValidator?: (value: any) => boolean | string;
-}
-
-interface ValidationSchema {
-  body?: ValidationRule[];
-  query?: ValidationRule[];
-  params?: ValidationRule[];
+interface ValidationSchemas {
+  body?: ZodSchema;
+  query?: ZodSchema;
+  params?: ZodSchema;
 }
 
 class InputValidator {
-  // Sanitize string inputs
-  private static sanitizeString(value: string): string {
-    if (typeof value !== 'string') return value;
-    
-    return value
-      .trim()
-      .replace(/[<>]/g, '') // Remove potential HTML tags
-      .replace(/javascript:/gi, '') // Remove javascript: protocol
-      .replace(/on\w+=/gi, '') // Remove event handlers
-      .substring(0, 10000); // Limit length
+  // Sanitize string inputs with Zod preprocessing
+  private static createSanitizedString() {
+    return z.string()
+      .transform((value) => {
+        if (typeof value !== 'string') return value;
+        
+        return value
+          .trim()
+          .replace(/[<>]/g, '') // Remove potential HTML tags
+          .replace(/javascript:/gi, '') // Remove javascript: protocol
+          .replace(/on\w+=/gi, '') // Remove event handlers
+          .substring(0, 10000); // Limit length
+      });
   }
 
-  // Validate individual field
-  private static validateField(value: any, rule: ValidationRule): string | null {
-    const { field, type, required, min, max, pattern, values, customValidator } = rule;
-
-    // Check if required
-    if (required && (value === undefined || value === null || value === '')) {
-      return `${field} is required`;
-    }
-
-    // Skip validation if field is optional and empty
-    if (!required && (value === undefined || value === null || value === '')) {
-      return null;
-    }
-
-    // Type validation
-    switch (type) {
-      case 'string':
-        if (typeof value !== 'string') {
-          return `${field} must be a string`;
-        }
-        if (min && value.length < min) {
-          return `${field} must be at least ${min} characters long`;
-        }
-        if (max && value.length > max) {
-          return `${field} must be no more than ${max} characters long`;
-        }
-        if (pattern && !pattern.test(value)) {
-          return `${field} format is invalid`;
-        }
-        break;
-
-      case 'number':
-        const num = typeof value === 'string' ? parseInt(value) : value;
-        if (typeof num !== 'number' || isNaN(num)) {
-          return `${field} must be a valid number`;
-        }
-        if (min !== undefined && num < min) {
-          return `${field} must be at least ${min}`;
-        }
-        if (max !== undefined && num > max) {
-          return `${field} must be no more than ${max}`;
-        }
-        break;
-
-      case 'boolean':
-        if (typeof value !== 'boolean' && value !== 'true' && value !== 'false') {
-          return `${field} must be a boolean`;
-        }
-        break;
-
-      case 'array':
-        if (!Array.isArray(value)) {
-          return `${field} must be an array`;
-        }
-        if (min && value.length < min) {
-          return `${field} must contain at least ${min} items`;
-        }
-        if (max && value.length > max) {
-          return `${field} must contain no more than ${max} items`;
-        }
-        break;
-
-      case 'object':
-        if (typeof value !== 'object' || Array.isArray(value)) {
-          return `${field} must be an object`;
-        }
-        break;
-    }
-
-    // Value enumeration validation
-    if (values && !values.includes(value)) {
-      return `${field} must be one of: ${values.join(', ')}`;
-    }
-
-    // Custom validation
-    if (customValidator) {
-      const result = customValidator(value);
-      if (typeof result === 'string') {
-        return result;
-      }
-      if (result === false) {
-        return `${field} validation failed`;
-      }
-    }
-
-    return null;
-  }
-
-  // Create validation middleware
-  static validate(schema: ValidationSchema) {
-    return (req: Request, res: Response, next: NextFunction) => {
+  // Create validation middleware using Zod schemas
+  static validate(schemas: ValidationSchemas) {
+    return async (req: Request, res: Response, next: NextFunction) => {
       const processedRes = res as ProcessedResponse;
       const errors: string[] = [];
 
-      // Validate body
-      if (schema.body) {
-        for (const rule of schema.body) {
-          const value = req.body?.[rule.field];
-          const error = this.validateField(value, rule);
-          if (error) errors.push(error);
+      try {
+        // Validate and sanitize body
+        if (schemas.body) {
+          const result = await schemas.body.safeParseAsync(req.body);
+          if (!result.success) {
+            errors.push(...this.formatZodErrors(result.error, 'body'));
+          } else {
+            req.body = result.data; // Use validated and transformed data
+          }
         }
-      }
 
-      // Validate query parameters
-      if (schema.query) {
-        for (const rule of schema.query) {
-          const value = req.query?.[rule.field];
-          const error = this.validateField(value, rule);
-          if (error) errors.push(error);
+        // Validate query parameters
+        if (schemas.query) {
+          const result = await schemas.query.safeParseAsync(req.query);
+          if (!result.success) {
+            errors.push(...this.formatZodErrors(result.error, 'query'));
+          } else {
+            req.query = result.data as any;
+          }
         }
-      }
 
-      // Validate URL parameters
-      if (schema.params) {
-        for (const rule of schema.params) {
-          const value = req.params?.[rule.field];
-          const error = this.validateField(value, rule);
-          if (error) errors.push(error);
+        // Validate URL parameters
+        if (schemas.params) {
+          const result = await schemas.params.safeParseAsync(req.params);
+          if (!result.success) {
+            errors.push(...this.formatZodErrors(result.error, 'params'));
+          } else {
+            req.params = result.data as any;
+          }
         }
-      }
 
-      if (errors.length > 0) {
-        return processedRes.apiBadRequest('Validation failed', {
-          errors,
-          fields_with_errors: errors.length
+        if (errors.length > 0) {
+          return processedRes.apiBadRequest('Validation failed', {
+            errors,
+            fields_with_errors: errors.length
+          });
+        }
+
+        next();
+      } catch (error) {
+        console.error('Validation error:', error);
+        return processedRes.apiBadRequest('Validation error occurred', {
+          errors: ['Internal validation error'],
+          fields_with_errors: 1
         });
       }
-
-      next();
     };
   }
 
-  // Sanitize request body
+  // Format Zod errors into user-friendly messages
+  private static formatZodErrors(zodError: ZodError<any>, section: string): string[] {
+    return zodError.issues.map((error: any) => {
+      const path = error.path.length > 0 ? error.path.join('.') : 'root';
+      const field = `${section}.${path}`;
+      
+      switch (error.code) {
+        case 'invalid_type':
+          return `${field} must be of type ${error.expected}, received ${error.received}`;
+        case 'too_small':
+          if (error.type === 'string') {
+            return `${field} must be at least ${error.minimum} characters long`;
+          }
+          return `${field} must be at least ${error.minimum}`;
+        case 'too_big':
+          if (error.type === 'string') {
+            return `${field} must be no more than ${error.maximum} characters long`;
+          }
+          return `${field} must be no more than ${error.maximum}`;
+        case 'invalid_string':
+          if (error.validation === 'email') {
+            return `${field} must be a valid email address`;
+          }
+          if (error.validation === 'regex') {
+            return `${field} format is invalid`;
+          }
+          return `${field} is invalid`;
+        case 'invalid_enum_value':
+          return `${field} must be one of: ${error.options.join(', ')}`;
+        default:
+          return error.message || `${field} is invalid`;
+      }
+    });
+  }
+
+  // Legacy sanitize method for backward compatibility
   static sanitize(req: Request, res: Response, next: NextFunction) {
     if (req.body && typeof req.body === 'object') {
       req.body = InputValidator.sanitizeObject(req.body);
@@ -180,7 +131,12 @@ class InputValidator {
       const sanitized: any = {};
       for (const [key, value] of Object.entries(obj)) {
         if (typeof value === 'string') {
-          sanitized[key] = this.sanitizeString(value);
+          sanitized[key] = value
+            .trim()
+            .replace(/[<>]/g, '')
+            .replace(/javascript:/gi, '')
+            .replace(/on\w+=/gi, '')
+            .substring(0, 10000);
         } else if (typeof value === 'object') {
           sanitized[key] = this.sanitizeObject(value);
         } else {
@@ -194,29 +150,59 @@ class InputValidator {
   }
 }
 
-// Pre-defined validation schemas for SEO endpoints
+// Zod validation schemas for SEO endpoints
 export const seoValidationSchemas = {
   keywordIntelligence: {
-    body: [
-      { field: 'keyword', type: 'string' as const, required: true, min: 1, max: 200 },
-      { field: 'location_code', type: 'number' as const, min: 1, max: 9999 },
-      { field: 'language_code', type: 'string' as const, pattern: /^[a-z]{2}(-[A-Z]{2})?$/ },
-      { 
-        field: 'source', 
-        type: 'string' as const, 
-        required: true,
-        values: ['google', 'bing', 'youtube']
-      }
-    ]
+    body: z.object({
+      keyword: z.string()
+        .min(1, "Keyword is required")
+        .max(200, "Keyword must be no more than 200 characters")
+        .transform((value) => value.trim().replace(/[<>]/g, '').substring(0, 200)),
+      
+      location_code: z.coerce.number()
+        .int("Location code must be an integer")
+        .min(1, "Location code must be at least 1")
+        .max(9999, "Location code must be no more than 9999")
+        .optional(),
+      
+      language_code: z.string()
+        .regex(/^[a-z]{2}(-[A-Z]{2})?$/, "Language code format is invalid (e.g., 'en', 'en-US')")
+        .optional(),
+      
+      source: z.enum(['google', 'bing', 'youtube'], {
+        message: "Source must be one of: google, bing, youtube"
+      })
+    })
   },
+
   keywordEnhancedAnalytics: {
-    body: [
-      { field: 'keyword', type: 'string' as const, required: true, min: 1, max: 200 },
-      { field: 'location_code', type: 'number' as const, min: 1, max: 9999 },
-      { field: 'language_code', type: 'string' as const, pattern: /^[a-z]{2}(-[A-Z]{2})?$/ },
-      { field: 'location_name', type: 'string' as const, min: 2, max: 100 }
-    ]
+    body: z.object({
+      keyword: z.string()
+        .min(1, "Keyword is required")
+        .max(200, "Keyword must be no more than 200 characters")
+        .transform((value) => value.trim().replace(/[<>]/g, '').substring(0, 200)),
+      
+      location_code: z.coerce.number()
+        .int("Location code must be an integer")
+        .min(1, "Location code must be at least 1")
+        .max(9999, "Location code must be no more than 9999")
+        .optional(),
+      
+      language_code: z.string()
+        .regex(/^[a-z]{2}(-[A-Z]{2})?$/, "Language code format is invalid (e.g., 'en', 'en-US')")
+        .optional(),
+      
+      location_name: z.string()
+        .min(2, "Location name must be at least 2 characters")
+        .max(100, "Location name must be no more than 100 characters")
+        .transform((value) => value.trim().replace(/[<>]/g, '').substring(0, 100))
+        .optional()
+    })
   }
 };
 
-export { InputValidator, ValidationRule, ValidationSchema };
+// Infer TypeScript types from Zod schemas
+export type KeywordIntelligenceRequest = z.infer<typeof seoValidationSchemas.keywordIntelligence.body>;
+export type KeywordEnhancedAnalyticsRequest = z.infer<typeof seoValidationSchemas.keywordEnhancedAnalytics.body>;
+
+export { InputValidator, z };
